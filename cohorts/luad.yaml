@@ -1,0 +1,40 @@
+cohort: luad
+archive_url: https://cbioportal-datahub.s3.amazonaws.com/luad_tcga_pan_can_atlas_2018.tar.gz
+files:
+  clinical_patient: data_clinical_patient.txt
+  clinical_sample: data_clinical_sample.txt
+  expression: data_mrna_seq_v2_rsem.txt
+  expression_fallback: data_mrna_seq_v2_rsem_zscores_ref_diploid_samples.txt
+  mutations: data_mutations.txt
+columns:
+  patient_id: PATIENT_ID
+  sample_id: SAMPLE_ID
+  os_months: OS_MONTHS
+  os_status: OS_STATUS
+  sample_patient_id: PATIENT_ID
+os_status_map:
+  deceased: "1:DECEASED"
+  living: "0:LIVING"
+covariates:
+  age: AGE
+  sex: SEX
+  stage: AJCC_PATHOLOGIC_TUMOR_STAGE
+stage_map:
+  "STAGE I": I
+  "STAGE IA": I
+  "STAGE IB": I
+  "STAGE II": II
+  "STAGE IIA": II
+  "STAGE IIB": II
+  "STAGE III": III
+  "STAGE IIIA": III
+  "STAGE IIIB": III
+  "STAGE IV": IV
+sample_type_suffix: "-01"
+n_expression_genes: 50
+mutation_genes:
+  - TP53
+  - KRAS
+  - EGFR
+  - STK11
+  - KEAP1
