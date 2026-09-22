@@ -114,3 +114,25 @@ def test_loaders_validate(synth_root, cfg):
     assert not load_clinical_sample(cfg, synth_root).empty
     assert not load_expression(cfg, synth_root).empty
     assert not load_mutations(cfg, synth_root).empty
+
+
+def test_config_hash_excludes_agent_keys(synth_root):
+    """rag_query edits must not change config_sha256; covariates edits must."""
+    import yaml
+
+    from oncocs.config import AGENT_ONLY_KEYS, load_cohort
+
+    assert "rag_query" in AGENT_ONLY_KEYS and "rag_docs" in AGENT_ONLY_KEYS
+    ypath = synth_root / "cohorts" / "synth.yaml"
+    raw = yaml.safe_load(ypath.read_text())
+    raw["rag_query"] = "some query"
+    raw["rag_docs"] = [{"doc_id": "d", "url": "https://x"}]
+    ypath.write_text(yaml.safe_dump(raw))
+    h1 = load_cohort("synth", synth_root).config_sha256
+    raw["rag_query"] = "a completely different query"
+    raw["rag_docs"] = [{"doc_id": "e", "url": "https://y"}, {"doc_id": "f"}]
+    ypath.write_text(yaml.safe_dump(raw))
+    assert load_cohort("synth", synth_root).config_sha256 == h1
+    raw["covariates"]["stage"] = "AJCC_PATHOLOGIC_TUMOR_STAGE_V2"
+    ypath.write_text(yaml.safe_dump(raw))
+    assert load_cohort("synth", synth_root).config_sha256 != h1

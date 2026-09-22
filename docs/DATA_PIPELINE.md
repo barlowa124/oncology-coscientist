@@ -48,6 +48,10 @@ Details:
   ids to `splits/<cohort>.json`, and records `split_sha256`
   (`split_sha256()` over sorted ids). It refuses to overwrite without
   `--force`.
+- `config_sha256` (`load_cohort`, `oncocs/config.py`) covers the deterministic
+  analysis config only: cohort-yaml keys in `AGENT_ONLY_KEYS` (`rag_query`,
+  `rag_docs`) feed the reporting agent and are excluded, so prompt/RAG edits
+  do not invalidate computed results.
 - Schema validation (pandera, `oncocs/schemas.py`) runs inside the loaders:
   `load_clinical_patient`, `load_clinical_sample`, `load_mutations`,
   `load_expression` validate their raw frames; `harmonize` validates the

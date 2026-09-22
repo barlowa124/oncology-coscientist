@@ -49,6 +49,12 @@ def _sha256_of_obj(obj) -> str:
     return hashlib.sha256(json.dumps(obj, sort_keys=True, default=str).encode()).hexdigest()
 
 
+# Cohort-yaml keys that affect only the agent/RAG reporting layer, not the
+# deterministic analysis. They are excluded from config_sha256 so prompt-side
+# edits do not invalidate computed results.
+AGENT_ONLY_KEYS = ("rag_query", "rag_docs")
+
+
 def load_cohort(name: str, root: Path | str = DEFAULT_ROOT) -> CohortConfig:
     path = Path(root) / "cohorts" / f"{name}.yaml"
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -71,5 +77,6 @@ def load_cohort(name: str, root: Path | str = DEFAULT_ROOT) -> CohortConfig:
         rag_query=raw.get("rag_query", ""),
         rag_docs=list(raw.get("rag_docs", [])),
     )
-    cfg.config_sha256 = _sha256_of_obj(raw)
+    cfg.config_sha256 = _sha256_of_obj(
+        {k: v for k, v in raw.items() if k not in AGENT_ONLY_KEYS})
     return cfg

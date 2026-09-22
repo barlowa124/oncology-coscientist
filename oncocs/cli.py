@@ -74,7 +74,7 @@ def _run_pipeline(cfg, root, seed):
     record["n_patients"] = report.get("n_patients_final")
     record["n_patients_with_expression"] = report.get("n_patients_with_expression")
     record["n_unsequenced_patients"] = report.get("n_unsequenced_patients")
-    record["omitted_covariates"] = report.get("omitted_covariates", [])
+    record["omitted_covariates"] = report.get("omitted_covariates") or []
 
     run_checks = [
         checks.check_split_integrity(split, patients.index),
@@ -352,10 +352,14 @@ def cmd_verify(args):
 
     # rerun with recorded seed and compare
     rerun = _run_pipeline(cfg, root, record["seed"])
-    if evidence.strip_volatile(rerun) == evidence.strip_volatile(record):
+    rec_s, rer_s = evidence.strip_volatile(record), evidence.strip_volatile(rerun)
+    if rec_s == rer_s:
         print("PASS" if ok else "FAIL")
         return 0 if ok else 1
     print("FAIL: rerun results differ from recorded results")
+    for k in sorted(set(rec_s) | set(rer_s)):
+        if rec_s.get(k) != rer_s.get(k):
+            print(f"  field differs: {k}")
     return 1
 
 
