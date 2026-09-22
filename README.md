@@ -88,6 +88,10 @@ ranking while sex is already a covariate.
   attempt was flagged for not disclosing the all-model abstention, attempts
   2 and 3 invented metric values (harrell_c = 0.45, etc.) for models that
   had abstained.
+- **`agent/318d61643606` and `agent/39189caa1502` (LUAD, BRCA, gemma3:27b):**
+  rejected — both drafts produced tidy metric tables whose values
+  (harrell_c 0.688 / 0.728, uno_c 0.162 / 0.118) do not exist in the
+  results; every attempt was flagged `unverified_numbers`.
 
 ## Model comparison (gemma3:4b vs gemma3:12b, seed 20240601, temp 0)
 
@@ -96,14 +100,16 @@ ranking while sex is already a covariate.
 the current prompts (all replay PASS — replay proves the recorded prompts and
 responses reproduce the same report and verdict under the current code):
 
-| Cohort | gemma3:4b | gemma3:12b |
-|---|---|---|
-| LUAD | rejected after 3 — unscoped model numbers, C-index mislabeled as calibration, unverified "significant" (`98d9952a9150`) | rejected after 3 — fabricated cohort size (602 for a 501-patient cohort), persistent misattribution (`a911996a2e14`) |
-| GBM | rejected after 3 — undisclosed abstention, then fabricated metric values for the abstained models (`a706c3f76993`) | rejected after 3 — abstention never disclosed (`c654c99fa00f`) |
-| BRCA | rejected after 3 — "robust" and unverified "significant" (`dd95bfcd2b8b`) | rejected after 3 — persistent misattribution (`14dee8f5d071`) |
+| Cohort | gemma3:4b | gemma3:12b | gemma3:27b |
+|---|---|---|---|
+| LUAD | rejected after 3 — unscoped model numbers, C-index mislabeled as calibration, unverified "significant" (`98d9952a9150`) | rejected after 3 — fabricated cohort size (602 for a 501-patient cohort), persistent misattribution (`a911996a2e14`) | rejected after 3 — invented metric values in every attempt (`318d61643606`) |
+| GBM | rejected after 3 — undisclosed abstention, then fabricated metric values for the abstained models (`a706c3f76993`) | rejected after 3 — abstention never disclosed (`c654c99fa00f`) | **passed in 1 attempt** (`ba8da12d0f19`), unapproved |
+| BRCA | rejected after 3 — "robust" and unverified "significant" (`dd95bfcd2b8b`) | rejected after 3 — persistent misattribution (`14dee8f5d071`) | rejected after 3 — invented metric values in every attempt (`39189caa1502`) |
 
-Under identical prompts, neither model produced a verified draft on any
-cohort in this round.
+Under identical prompts, only gemma3:27b produced a verified draft, on GBM
+(the all-abstained cohort) in a single attempt. The LUAD and BRCA 27b runs
+were rejected for inventing metric values not present in the results table
+(e.g. harrell_c 0.688 / 0.728 vs the computed 0.647 / 0.708).
 
 ### Earlier runs (pre-prompt-change, kept as evidence)
 

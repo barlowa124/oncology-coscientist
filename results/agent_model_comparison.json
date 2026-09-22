@@ -68,6 +68,42 @@
     {
       "cohort": "brca",
       "run_id": "24528d61379c",
+      "agent_run_id": "39189caa1502",
+      "model_id": "gemma3:27b",
+      "status": "rejected",
+      "attempts": 3,
+      "analysis_plan_fallback": false,
+      "findings_per_attempt": [
+        {
+          "attempt": 1,
+          "findings": {
+            "unverified_numbers": 19,
+            "unscoped_model_numbers": 1
+          }
+        },
+        {
+          "attempt": 2,
+          "findings": {
+            "unverified_numbers": 19,
+            "unscoped_model_numbers": 3,
+            "missing_sections": 4
+          }
+        },
+        {
+          "attempt": 3,
+          "findings": {
+            "unverified_numbers": 21,
+            "unscoped_model_numbers": 10
+          }
+        }
+      ],
+      "replay": "PASS",
+      "human_review": null,
+      "path": "results\\brca\\24528d61379c\\agent\\39189caa1502\\agent_run.json"
+    },
+    {
+      "cohort": "brca",
+      "run_id": "24528d61379c",
       "agent_run_id": "4afbc74b7bc5",
       "model_id": "gemma3:12b",
       "status": "rejected",
@@ -252,6 +288,26 @@
     {
       "cohort": "gbm",
       "run_id": "2beaf67dc0b2",
+      "agent_run_id": "ba8da12d0f19",
+      "model_id": "gemma3:27b",
+      "status": "draft_pending_approval",
+      "attempts": 1,
+      "analysis_plan_fallback": false,
+      "findings_per_attempt": [
+        {
+          "attempt": 1,
+          "findings": {
+            "passed": 1
+          }
+        }
+      ],
+      "replay": "PASS",
+      "human_review": null,
+      "path": "results\\gbm\\2beaf67dc0b2\\agent\\ba8da12d0f19\\agent_run.json"
+    },
+    {
+      "cohort": "gbm",
+      "run_id": "2beaf67dc0b2",
       "agent_run_id": "c654c99fa00f",
       "model_id": "gemma3:12b",
       "status": "rejected",
@@ -352,6 +408,43 @@
       "replay": "FROZEN",
       "human_review": null,
       "path": "results\\gbm\\2beaf67dc0b2\\agent\\ea53fcd852c2\\agent_run.json"
+    },
+    {
+      "cohort": "luad",
+      "run_id": "3097990b11d8",
+      "agent_run_id": "318d61643606",
+      "model_id": "gemma3:27b",
+      "status": "rejected",
+      "attempts": 3,
+      "analysis_plan_fallback": false,
+      "findings_per_attempt": [
+        {
+          "attempt": 1,
+          "findings": {
+            "unverified_numbers": 10,
+            "unscoped_model_numbers": 12
+          }
+        },
+        {
+          "attempt": 2,
+          "findings": {
+            "unverified_numbers": 11,
+            "unscoped_model_numbers": 26,
+            "missing_sections": 2
+          }
+        },
+        {
+          "attempt": 3,
+          "findings": {
+            "unverified_numbers": 4,
+            "misattributed": 4,
+            "missing_sections": 2
+          }
+        }
+      ],
+      "replay": "PASS",
+      "human_review": null,
+      "path": "results\\luad\\3097990b11d8\\agent\\318d61643606\\agent_run.json"
     },
     {
       "cohort": "luad",
