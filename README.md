@@ -28,8 +28,8 @@ Every kept sample had mutation sequencing data (0 unsequenced).
 |---|---|---|---|---|---|---|
 | Cox / clinical | 0.647 | 0.640 | 0.649 | 0.691 | 0.694 | 0.153 |
 | RSF / clinical | 0.639 | 0.639 | 0.604 | 0.675 | 0.695 | 0.153 |
-| Cox / clinical + expression | 0.643 | 0.625 | 0.699 | 0.667 | 0.624 | 0.157 |
-| RSF / clinical + expression | 0.651 | 0.628 | 0.715 | 0.695 | 0.645 | 0.152 |
+| Cox / clinical + expression | 0.643 | 0.632 | 0.711 | 0.666 | 0.628 | 0.157 |
+| RSF / clinical + expression | 0.632 | 0.615 | 0.671 | 0.672 | 0.609 | 0.153 |
 
 Top clinical Cox hazard ratios (reference: stage I, sex Female):
 
@@ -43,10 +43,10 @@ Top clinical Cox hazard ratios (reference: stage I, sex Female):
 Observations:
 
 - Adding the top-50 variance expression genes did not improve over clinical features:
-  Cox C 0.643 vs 0.647; RSF C 0.651 vs 0.639.
-- The `excluded_genes` list in `cohorts/luad.yaml` exists because sex-linked genes
-  (XIST, RPS4Y1, DDX3Y, etc.) dominated the variance ranking while sex is already a
-  covariate.
+  Cox C 0.643 vs 0.647; RSF C 0.632 vs 0.639.
+- The `excluded_genes` list and `excluded_gene_patterns` (`^CYorf`, `^TTTY`) in
+  `cohorts/luad.yaml` exist because sex-linked genes (XIST, RPS4Y1, DDX3Y, CYorf15A/B,
+  etc.) dominated the variance ranking while sex is already a covariate.
 
 ## Limitations
 
