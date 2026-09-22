@@ -8,6 +8,47 @@ computation — including which model each number belongs to — and a human
 approval gate signs off. Every LLM call is recorded and can be replayed
 byte-for-byte.
 
+## How to read the results on this page
+
+Two different things are evaluated here, and they have opposite outcomes.
+
+1. **The software passes.** The deterministic survival pipeline (Cox PH, RSF,
+   metrics, assumption checks) verifies and replays bit-for-bit on all three
+   cohorts; the offline test suite passes (45 tests). Every number in the
+   results tables below comes from that code.
+2. **Gemma's written reports mostly do not pass.** After the numbers are
+   computed, a local Gemma 3 model is asked only to *describe* them. Across the
+   same-prompt comparison (gemma3:4b, 12b, 27b × LUAD, GBM, BRCA), the claim
+   verifier rejected 8 of 9 drafts, and the one it passed (27b, GBM) was rejected
+   by human review. **No report has been approved.** A red cell in the
+   comparison table is the verifier catching the model, not a software failure.
+
+What is established about the writing failure, from the preserved drafts:
+
+- **The failure is fabrication under fluency, not arithmetic.** When handed
+  real metrics, every model size wrote plausible numbers that do not exist in
+  the results (e.g. 27b: Harrell C 0.688 vs computed 0.647 on LUAD; 0.728 vs
+  0.708 on BRCA). The 27b model was rejected on LUAD and BRCA in all three
+  attempts even though the correct values were in its prompt.
+- **Scale did not fix it.** 27b's single verifier pass was on GBM, where every
+  model abstained and there were no metrics to fabricate — and its prose still
+  misread *why* the checks failed.
+- **Smaller models added structural errors** (undisclosed abstention, metrics
+  attributed to the wrong model, invented cohort size, invented citations);
+  these largely disappeared at 27b while numeric fabrication did not.
+
+What is **not** established is the mechanism inside the model — why a
+transformer given the exact value 0.647 in context emits 0.688. That is a
+question about the model's internals, not about this pipeline, and it is the
+subject of the companion
+[bioprocess-decision-runtime](https://github.com/barlowa124/bioprocess-decision-runtime)
+work, which reconstructs Gemma inference layer by layer against a pinned
+checkpoint. Note the gap: that work is bound to a specific Hugging Face
+checkpoint and runtime, while the runs here use Ollama's quantized gemma3 GGUF
+builds. Any mechanistic explanation must first be shown to apply to the model
+that actually produced these drafts. Until then, this repository claims only
+what it can show: the fabrication happens, it is reproducible, and it is caught.
+
 Stack: LangGraph StateGraph agents; lifelines Cox PH and scikit-survival Random
 Survival Forest; BM25 retrieval over NCI PDQ; FastAPI review API; pluggable LLM
 backend (Ollama gemma3 by default, any LangChain chat model, recorded
