@@ -48,6 +48,55 @@ Observations:
   `cohorts/luad.yaml` exist because sex-linked genes (XIST, RPS4Y1, DDX3Y, CYorf15A/B,
   etc.) dominated the variance ranking while sex is already a covariate.
 
+## All cohorts (seed 20240601)
+
+| Cohort | n | Events train/test | Checks | Best Harrell C (test) |
+|---|---|---|---|---|
+| LUAD | 501 | 126 / 55 | all 5 passed | 0.647 — cox/clinical |
+| GBM | 580 | 335 / 143 | 2 passed, all 4 models abstained | — |
+| BRCA | 1071 | 106 / 45 | all 5 passed | 0.708 — cox/clinical |
+
+- GBM has no AJCC stage in this study (`stage: null` in `cohorts/gbm.yaml`;
+  recorded as `omitted_covariates`), and 49% of patients lack age/sex plus 33%
+  lack mutation sequencing in the source files. Every covariate exceeded the 20%
+  missingness filter, so the run records a `covariates` check failure and all
+  four models abstain — a legitimate outcome, not an error.
+- BRCA adds `STAGE IIIC` and `STAGE X` source values. `STAGE X` ("stage cannot be
+  assessed") is left unmapped and counted as missing (19 patients, 1.8%).
+
+## Generality: cost of adding a cohort
+
+GBM and BRCA were added as yaml-only cohorts (`cohorts/gbm.yaml`,
+`cohorts/brca.yaml`) — no cohort-specific Python. The only `oncocs/` changes
+between the phase-3 start commit and the end (78 lines across 3 files) were
+generic fixes any cohort could trigger: Git LFS pointer detection in the
+per-file download fallback, replay comparison for rejected/abstained reports,
+and a clean abstention path when no covariates survive the missingness filter.
+
+## Agent reports
+
+`python -m oncocs agent run --cohort <id> --results <results.json> --backend
+ollama --model gemma3:4b` runs a LangGraph pipeline (cohort summary → analysis
+plan → report draft → deterministic claim verifier, up to 3 attempts) and writes
+`results/<id>/<run_id>/agent/<agent_run_id>/{agent_run.json,report.md}`.
+`agent replay <agent_run.json>` replays the recorded transcript and asserts the
+report and verification are identical; `approve`/`reject` are explicit human
+gates that rewrite the report banner.
+
+The verifier checks every number in the draft against the recorded results, and
+numbers appearing after a model-key mention are scoped to that model's subtree —
+a number that only matches a different model is reported as `misattributed` and
+fails verification.
+
+### Human-rejected run
+
+`results/luad/3097990b11d8/agent/7b433c558b79/` is preserved as the motivating
+example: gemma3:4b produced a report whose `rsf/clinical_expression` block
+listed `cox/clinical_expression`'s metrics and omitted `rsf/clinical` entirely.
+Every number was real, so the original numeric verifier passed it; a human
+reviewer rejected it via `oncocs reject`. The scoped verifier now segments the
+draft by model-key mentions and fails that exact pattern (covered by tests).
+
 ## Limitations
 
 - Research/education only. Not validated for clinical, diagnostic, prognostic, or
