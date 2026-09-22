@@ -89,11 +89,22 @@ def download_cohort(cfg: CohortConfig, root: Path | str = DEFAULT_ROOT) -> dict:
                     resp.raise_for_status()
                     dest.write_bytes(resp.content)
                 except requests.RequestException as exc:
-                    if key == "mutations":
-                        print(f"  failed ({exc}); fetching mutations via cBioPortal API.")
-                        _fetch_mutations_api(cfg, dest)
-                    else:
-                        raise
+                    done = False
+                    if cfg.file_base_url_alt:
+                        alt = f"{cfg.file_base_url_alt.rstrip('/')}/{name}"
+                        try:
+                            resp = requests.get(alt, timeout=600)
+                            resp.raise_for_status()
+                            dest.write_bytes(resp.content)
+                            done = True
+                        except requests.RequestException:
+                            pass
+                    if not done:
+                        if key == "mutations":
+                            print(f"  failed ({exc}); fetching mutations via cBioPortal API.")
+                            _fetch_mutations_api(cfg, dest)
+                        else:
+                            raise
             member_sha[name] = _sha256_file(dest)
         missing = [n for n in used_names if not (raw_dir / n).exists()]
         if missing:

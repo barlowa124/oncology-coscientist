@@ -16,6 +16,7 @@ class CohortConfig:
     cohort: str
     archive_url: str
     file_base_url: str
+    file_base_url_alt: str
     files: dict
     columns: dict
     os_status_map: dict
@@ -52,6 +53,7 @@ def load_cohort(name: str, root: Path | str = DEFAULT_ROOT) -> CohortConfig:
         cohort=raw["cohort"],
         archive_url=raw.get("archive_url", ""),
         file_base_url=raw.get("file_base_url", ""),
+        file_base_url_alt=raw.get("file_base_url_alt", ""),
         files=raw["files"],
         columns=raw["columns"],
         os_status_map=raw.get("os_status_map", {}),

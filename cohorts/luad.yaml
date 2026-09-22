@@ -1,6 +1,7 @@
 cohort: luad
 archive_url: https://cbioportal-datahub.s3.amazonaws.com/luad_tcga_pan_can_atlas_2018.tar.gz
 file_base_url: https://media.githubusercontent.com/media/cBioPortal/datahub/master/public/luad_tcga_pan_can_atlas_2018
+file_base_url_alt: https://raw.githubusercontent.com/cBioPortal/datahub/master/public/luad_tcga_pan_can_atlas_2018
 files:
   clinical_patient: data_clinical_patient.txt
   clinical_sample: data_clinical_sample.txt
