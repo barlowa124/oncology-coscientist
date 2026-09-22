@@ -68,13 +68,14 @@ def harmonize(
 
     # --- covariates ---
     covar_cols = {}
-    if "age" in cfg.covariates:
+    report["omitted_covariates"] = [k for k, v in cfg.covariates.items() if not v]
+    if cfg.covariates.get("age"):
         cp["age"] = pd.to_numeric(_clean(cp[cfg.covariates["age"]]), errors="coerce")
         covar_cols["age"] = "numeric"
-    if "sex" in cfg.covariates:
+    if cfg.covariates.get("sex"):
         cp["sex"] = _clean(cp[cfg.covariates["sex"]])
         covar_cols["sex"] = "categorical"
-    if "stage" in cfg.covariates:
+    if cfg.covariates.get("stage"):
         raw_stage = _clean(cp[cfg.covariates["stage"]])
         cp["stage"] = raw_stage.map(cfg.stage_map)
         covar_cols["stage"] = "categorical"

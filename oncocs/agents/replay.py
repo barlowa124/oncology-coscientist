@@ -14,7 +14,7 @@ def replay_agent(agent_run_path: Path) -> tuple[bool, str]:
     agent_run_path = Path(agent_run_path)
     record = json.loads(agent_run_path.read_text(encoding="utf-8"))
     results = json.loads(Path(record["results_path"]).read_text(encoding="utf-8"))
-    root = agent_run_path.parents[3]  # results/<cohort>/<run_id>/agent_run.json
+    root = agent_run_path.parents[5]  # results/<cohort>/<run_id>/agent/<agent_run_id>/agent_run.json
 
     from oncocs.config import load_cohort
     from oncocs.splits import load_split

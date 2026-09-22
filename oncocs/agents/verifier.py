@@ -47,7 +47,8 @@ def extract_numbers(text: str) -> list[dict]:
         decimals = len(val.split(".")[1]) if "." in val else 0
         ctx = text[max(0, m.start() - 30): m.end() + 30].replace("\n", " ")
         tokens.append({"token": raw, "value": float(val), "is_pct": is_pct,
-                       "decimals": decimals, "context": ctx.strip()})
+                       "decimals": decimals, "context": ctx.strip(),
+                       "pos": m.start()})
     return tokens
 
 
@@ -62,26 +63,84 @@ def _has_section(draft: str, title: str) -> bool:
                           draft, re.I | re.M))
 
 
+def _model_scopes(draft: str, model_keys: list) -> list:
+    """Segment the draft by model-key mentions at heading/bullet/paragraph starts.
+    Returns list of (start, end, model_key) covering the draft."""
+    mentions = []
+    for key in sorted(model_keys, key=len, reverse=True):
+        for m in re.finditer(r"(?m)^[>\s*#\-]*" + re.escape(key) + r"(?![\w/])",
+                             draft):
+            mentions.append((m.start(), key))
+    mentions.sort()
+    scopes = []
+    for i, (pos, key) in enumerate(mentions):
+        end = mentions[i + 1][0] if i + 1 < len(mentions) else len(draft)
+        scopes.append((pos, end, key))
+    return scopes
+
+
 def verify_draft(draft: str, flat_values: dict[str, float],
-                 checks: list[dict]) -> dict:
+                 checks: list[dict], models: dict | None = None,
+                 focus_models: list | None = None) -> dict:
     values = list(flat_values.values())
     unverified, forbidden, missing = [], [], []
+    misattributed, missing_focus = [], []
 
     has_time_keys = {
         t for t in (12, 24, 36)
         if any(k.endswith(f"_{t}m") or f"_{t}m" in k for k in flat_values)
     }
 
+    # per-model value sets and global (non-model) values for scoped checks
+    model_vals = {}
+    global_vals = []
+    if models:
+        for key, out in models.items():
+            model_vals[key] = list(flatten_results(out).values())
+        global_vals = [v for k, v in flat_values.items()
+                       if not any(k == f"models.{mk}" or k.startswith(f"models.{mk}.")
+                                  for mk in models)]
+    scopes = _model_scopes(draft, list(models)) if models else []
+
+    def _scope_of(pos: int) -> str | None:
+        owner = None
+        for start, end, key in scopes:
+            if start <= pos < end:
+                owner = key
+        return owner
+
     for tok in extract_numbers(draft):
         v, tol = tok["value"], 0.5 * 10 ** (-tok["decimals"])
-        ok = any(abs(v - fv) <= tol for fv in values)
-        if not ok and tok["is_pct"]:
-            ok = any(abs(v / 100.0 - fv) <= tol for fv in values)
+
+        def _matches(vs):
+            nonlocal_v = tok["value"] / 100.0 if tok["is_pct"] else None
+            return any(abs(v - fv) <= tol for fv in vs) or (
+                nonlocal_v is not None and
+                any(abs(nonlocal_v - fv) <= tol for fv in vs))
+
+        scope = _scope_of(tok["pos"]) if scopes else None
+        if scope:
+            ok = _matches(model_vals[scope]) or _matches(global_vals)
+            if not ok:
+                owners = [k for k, vs in model_vals.items() if k != scope and _matches(vs)]
+                if owners:
+                    misattributed.append({"token": tok["token"],
+                                          "attributed_to": scope,
+                                          "actually_in": owners,
+                                          "context": tok["context"]})
+                    continue
+        else:
+            ok = _matches(values)
         if not ok and tok["decimals"] == 0 and int(v) in (12, 24, 36) \
                 and int(v) in has_time_keys:
             ok = True
         if not ok:
             unverified.append({"token": tok["token"], "context": tok["context"]})
+
+    if models and focus_models:
+        for fm in focus_models:
+            if fm in models and fm not in draft:
+                missing_focus.append(fm)
 
     low = draft.lower()
     for phrase in FORBIDDEN_PHRASES:
@@ -111,8 +170,12 @@ def verify_draft(draft: str, flat_values: dict[str, float],
         abstention_missing = "abstain" not in _checks_section(draft).lower()
 
     return {
-        "passed": not unverified and not forbidden and not missing and not abstention_missing,
+        "passed": (not unverified and not forbidden and not missing
+                   and not abstention_missing and not misattributed
+                   and not missing_focus),
         "unverified_numbers": unverified,
+        "misattributed": misattributed,
+        "missing_focus_models": missing_focus,
         "forbidden": forbidden,
         "missing_sections": missing,
         "abstention_missing": abstention_missing,

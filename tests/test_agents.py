@@ -75,6 +75,15 @@ def test_verifier_abstention_and_significant():
 
 # ---------- graph ----------
 
+def _run_path(results_path, rec):
+    return (Path(results_path).parent / "agent" / rec["agent_run_id"]
+            / "agent_run.json")
+
+
+def _report_path(results_path, rec):
+    return _run_path(results_path, rec).parent / "report.md"
+
+
 def _agent_run(root, results_path, responses, seed=SEED):
     from oncocs.llm.recorded import RecordingBackend
     backend = RecordingBackend(ScriptedBackend(responses))
@@ -93,7 +102,7 @@ def _scripted_ok(results_path):
 def test_graph_passes_and_writes_banner(synth_results):
     rec = _agent_run(synth_results.parents[3], synth_results, _scripted_ok(synth_results))
     assert rec["status"] == "draft_pending_approval"
-    md = (synth_results.parent / "report.md").read_text(encoding="utf-8")
+    md = _report_path(synth_results, rec).read_text(encoding="utf-8")
     assert UNAPPROVED_BANNER in md
 
 
@@ -136,11 +145,11 @@ def test_rejected_rendering_and_approve_refusal(synth_results):
     rec = _agent_run(synth_results.parents[3], synth_results,
                      ["cohort text", '{"focus_models": []}', bad, bad, bad])
     assert rec["status"] == "rejected"
-    md = (synth_results.parent / "report.md").read_text(encoding="utf-8")
+    md = _report_path(synth_results, rec).read_text(encoding="utf-8")
     assert "REJECTED" in md and UNAPPROVED_BANNER not in md
     assert "agent_run.json" in md
     with pytest.raises(ValueError):
-        approve(synth_results.parent / "agent_run.json", by="tester")
+        approve(_run_path(synth_results, rec), by="tester")
 
 
 def test_modeling_node_abstains_on_tamper(synth_results, tmp_path):
@@ -156,7 +165,7 @@ def test_modeling_node_abstains_on_tamper(synth_results, tmp_path):
 
 def test_replay_identical_and_tamper_detected(synth_results):
     rec = _agent_run(synth_results.parents[3], synth_results, _scripted_ok(synth_results))
-    run_path = synth_results.parent / "agent_run.json"
+    run_path = _run_path(synth_results, rec)
     ok, msg = replay_agent(run_path)
     assert ok, msg
     tampered = json.loads(run_path.read_text())
@@ -170,9 +179,9 @@ def test_replay_identical_and_tamper_detected(synth_results):
 
 def test_approve_and_tamper_refusal(synth_results):
     rec = _agent_run(synth_results.parents[3], synth_results, _scripted_ok(synth_results))
-    run_path = synth_results.parent / "agent_run.json"
+    run_path = _run_path(synth_results, rec)
     approve(run_path, by="tester", note="looks right")
-    md = (synth_results.parent / "report.md").read_text(encoding="utf-8")
+    md = _report_path(synth_results, rec).read_text(encoding="utf-8")
     assert "> Approved by tester" in md and UNAPPROVED_BANNER not in md
     # editing the approved run then trying to approve again must fail
     tampered = json.loads(run_path.read_text())
@@ -181,3 +190,80 @@ def test_approve_and_tamper_refusal(synth_results):
     run_path.write_text(json.dumps(tampered))
     with pytest.raises(ValueError):
         approve(run_path, by="attacker")
+
+
+# ---------- reject ----------
+
+def test_reject_and_mutual_exclusion(synth_results):
+    from oncocs.agents.approve import reject
+    rec = _agent_run(synth_results.parents[3], synth_results, _scripted_ok(synth_results))
+    rp = _run_path(synth_results, rec)
+    reject(rp, by="lead", reason="mislabeled block")
+    record = json.loads(rp.read_text())
+    assert record["human_review"]["decision"] == "rejected"
+    assert record["human_review"]["by"] == "lead"
+    md = _report_path(synth_results, rec).read_text(encoding="utf-8")
+    assert "REJECTED BY HUMAN REVIEWER (lead)" in md
+    # approve refuses after reject
+    with pytest.raises(ValueError):
+        approve(rp, by="someone")
+    # reject refuses after approve
+    rec2 = _agent_run(synth_results.parents[3], synth_results,
+                      _scripted_ok(synth_results))
+    rp2 = _run_path(synth_results, rec2)
+    approve(rp2, by="tester")
+    with pytest.raises(ValueError):
+        reject(rp2, by="lead", reason="too late")
+
+
+# ---------- scoped claim verification ----------
+
+SCOPE_FLAT = {"n_patients": 501.0, "split.n_train": 350.0,
+              "models.cox/clinical.metrics.harrell_c": 0.647,
+              "models.cox/clinical_expression.metrics.harrell_c": 0.643,
+              "models.rsf/clinical.metrics.harrell_c": 0.639,
+              "models.rsf/clinical_expression.metrics.harrell_c": 0.632}
+SCOPE_MODELS = {
+    "cox/clinical": {"metrics": {"harrell_c": 0.647}},
+    "cox/clinical_expression": {"metrics": {"harrell_c": 0.643}},
+    "rsf/clinical": {"metrics": {"harrell_c": 0.639}},
+    "rsf/clinical_expression": {"metrics": {"harrell_c": 0.632}},
+}
+FOCUS_ALL = list(SCOPE_MODELS)
+
+
+def _scoped_draft(body: str) -> str:
+    return ("## Cohort\n501 patients.\n\n## Models and metrics\n" + body +
+            "\n\n## Checks and abstentions\nAll checks passed.\n\n"
+            "## Limitations\nResearch only.")
+
+
+def test_scoped_verifier_catches_misattribution():
+    # the preserved-run pattern: cox/clinical_expression numbers under an rsf label
+    body = ("* cox/clinical: C 0.647\n* rsf/clinical: C 0.639\n"
+            "* cox/clinical_expression: C 0.643\n"
+            "* rsf/clinical_expression: C 0.643\n")
+    v = verify_draft(_scoped_draft(body), SCOPE_FLAT, [], models=SCOPE_MODELS,
+                     focus_models=FOCUS_ALL)
+    assert not v["passed"]
+    ma = v["misattributed"][0]
+    assert ma["attributed_to"] == "rsf/clinical_expression"
+    assert "cox/clinical_expression" in ma["actually_in"]
+
+
+def test_scoped_verifier_correct_attribution_and_global_counts():
+    body = ("* cox/clinical: C 0.647\n* rsf/clinical: C 0.639\n"
+            "* cox/clinical_expression: C 0.643 (n_train 350)\n"
+            "* rsf/clinical_expression: C 0.632\n")
+    v = verify_draft(_scoped_draft(body), SCOPE_FLAT, [], models=SCOPE_MODELS,
+                     focus_models=FOCUS_ALL)
+    assert v["passed"], v
+
+
+def test_scoped_verifier_missing_focus_model():
+    body = ("* cox/clinical: C 0.647\n* rsf/clinical: C 0.639\n"
+            "* cox/clinical_expression: C 0.643\n")
+    v = verify_draft(_scoped_draft(body), SCOPE_FLAT, [], models=SCOPE_MODELS,
+                     focus_models=FOCUS_ALL)
+    assert not v["passed"]
+    assert v["missing_focus_models"] == ["rsf/clinical_expression"]

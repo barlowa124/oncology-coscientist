@@ -67,6 +67,7 @@ def _run_pipeline(cfg, root, seed):
     record["n_patients"] = report.get("n_patients_final")
     record["n_patients_with_expression"] = report.get("n_patients_with_expression")
     record["n_unsequenced_patients"] = report.get("n_unsequenced_patients")
+    record["omitted_covariates"] = report.get("omitted_covariates", [])
 
     run_checks = [
         checks.check_split_integrity(split, patients.index),
@@ -230,7 +231,7 @@ def cmd_agent_run(args):
         backend = OllamaBackend(model=args.model)
     record = run_agent(args.cohort, results_path, backend, args.seed,
                        Path(args.data_dir))
-    print(f"Agent run written to {Path(record['results_path']).parent / 'agent_run.json'}")
+    print(f"Agent run written to {Path(record['results_path']).parent / 'agent' / record['agent_run_id'] / 'agent_run.json'}")
     print(f"  status: {record['status']}  attempts: {len(record['drafts'])}")
 
 
@@ -249,6 +250,17 @@ def cmd_approve(args):
         print(f"FAIL: {exc}", file=sys.stderr)
         return 1
     print(f"Approved. Report updated: {path}")
+    return 0
+
+
+def cmd_reject(args):
+    from oncocs.agents.approve import reject
+    try:
+        path = reject(Path(args.agent_run), by=args.by, reason=args.reason)
+    except ValueError as exc:
+        print(f"FAIL: {exc}", file=sys.stderr)
+        return 1
+    print(f"Rejected. Report updated: {path}")
     return 0
 
 
@@ -296,6 +308,12 @@ def main(argv=None):
     ap.add_argument("--by", required=True)
     ap.add_argument("--note", default="")
     ap.set_defaults(fn=cmd_approve)
+
+    rj = sub.add_parser("reject")
+    rj.add_argument("agent_run")
+    rj.add_argument("--by", required=True)
+    rj.add_argument("--reason", required=True)
+    rj.set_defaults(fn=cmd_reject)
 
     args = p.parse_args(argv)
     args.data_dir = Path(args.data_dir)

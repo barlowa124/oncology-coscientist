@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import uuid
 from pathlib import Path
 from typing import TypedDict
 
@@ -85,16 +86,18 @@ def render_table(results: dict, split: dict) -> str:
     for name, out in results["models"].items():
         m = out["metrics"]
         if m.get("abstained"):
-            lines.append(f"{name}: ABSTAINED ({m['reason']})")
+            lines.append(f"{name}.abstained = true ({m['reason']})")
             continue
-        lines.append(f"{name}: harrell_c={m['harrell_c']:.3f} uno_c={m['uno_c']:.3f} "
-                     f"auc_12m={m['auc_12m']:.3f} auc_24m={m['auc_24m']:.3f} "
-                     f"auc_36m={m['auc_36m']:.3f} integrated_brier_6_36m={m['integrated_brier_6_36m']:.3f}")
+        for k, v in m.items():
+            if k == "calibration_24m":
+                continue
+            lines.append(f"{name}.{k} = {v:.3f}")
         for h in out.get("hazard_ratios", []):
-            lines.append(f"  {name} HR {h['covariate']}: {h['hazard_ratio']:.2f} "
-                         f"[{h['hr_ci_lower']:.2f}, {h['hr_ci_upper']:.2f}] p={h['p']:.4f}")
+            lines.append(f"{name}.HR[{h['covariate']}] = {h['hazard_ratio']:.2f} "
+                         f"[{h['hr_ci_lower']:.2f}, {h['hr_ci_upper']:.2f}] "
+                         f"p={h['p']:.4f}")
         if out.get("reference_levels"):
-            lines.append(f"  {name} reference_levels: {json.dumps(out['reference_levels'])}")
+            lines.append(f"{name}.reference_levels = {json.dumps(out['reference_levels'])}")
     return "\n".join(lines)
 
 
@@ -178,7 +181,9 @@ def build_graph(backend, seed: int | None = None):
             "failed, state the corresponding metrics as abstained. Forbidden phrasing: "
             "'clinically validated', 'proves', 'causes', 'should be used', 'outperforms', "
             "'state-of-the-art', 'robust', and 'significant' without an adjacent "
-            "verifiable p-value. Do not name models, versions, or patient identifiers."
+            "verifiable p-value. Do not name models, versions, or patient identifiers. "
+            "Describe each check by its recorded outcome and detail; do not infer "
+            "assumption validity from confidence intervals."
         )
         user = (
             "Results table (numbers at display precision; cite these only):\n"
@@ -195,6 +200,13 @@ def build_graph(backend, seed: int | None = None):
             findings = []
             for u in v.get("unverified_numbers", []):
                 findings.append(f"  - {u['token']} (context: {u['context']})")
+            for ma in v.get("misattributed", []):
+                findings.append(f"  - The number {ma['token']} appears under "
+                                f"{ma['attributed_to']} but belongs to "
+                                f"{', '.join(ma['actually_in'])}.")
+            for fm in v.get("missing_focus_models", []):
+                findings.append(f"  - model {fm} was in the analysis plan but is "
+                                "never discussed")
             for f in v.get("forbidden", []):
                 findings.append(f"  - forbidden phrasing: {f}")
             for s in v.get("missing_sections", []):
@@ -209,7 +221,10 @@ def build_graph(backend, seed: int | None = None):
                 "attempts": attempts}
 
     def claim_verifier(state: AgentState) -> dict:
-        v = verify_draft(state["draft"], state["flat_values"], state["results"]["checks"])
+        v = verify_draft(state["draft"], state["flat_values"], state["results"]["checks"],
+                         models=state["results"].get("models"),
+                         focus_models=(state.get("analysis_plan") or {})
+                         .get("focus_models"))
         drafts = list(state.get("drafts", []))
         drafts.append({"attempt": state["attempts"], "draft": state["draft"],
                        "verification": v})
@@ -287,7 +302,9 @@ def run_agent(cohort: str, results_path: Path, backend, seed: int | None,
     """Run the graph, write agent_run.json + report.md, return the agent record."""
     results = json.loads(Path(results_path).read_text(encoding="utf-8"))
     results_sha = hashlib.sha256(Path(results_path).read_bytes()).hexdigest()
-    out_dir = Path(results_path).parent
+    agent_run_id = uuid.uuid4().hex[:12]
+    out_dir = Path(results_path).parent / "agent" / agent_run_id
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     from oncocs.config import load_cohort
     from oncocs.llm.recorded import RecordingBackend
@@ -300,7 +317,7 @@ def run_agent(cohort: str, results_path: Path, backend, seed: int | None,
     final = graph.invoke(init)
 
     record = {
-        "agent_run_id": evidence.uuid.uuid4().hex[:12],
+        "agent_run_id": agent_run_id,
         "timestamp": evidence.datetime.now(evidence.timezone.utc).isoformat(),
         "cohort": cohort,
         "results_path": str(results_path),
