@@ -25,6 +25,10 @@ def _sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def _is_lfs_pointer(data: bytes) -> bool:
+    return data[:60].startswith(b"version https://git-lfs.github.com/spec/v1")
+
+
 def download_cohort(cfg: CohortConfig, root: Path | str = DEFAULT_ROOT) -> dict:
     """Fetch the cohort archive, extract it under data/<cohort>/raw/, write manifest.json."""
     root = Path(root)
@@ -84,27 +88,41 @@ def download_cohort(cfg: CohortConfig, root: Path | str = DEFAULT_ROOT) -> dict:
             if not dest.exists():
                 url = f"{cfg.file_base_url.rstrip('/')}/{name}"
                 print(f"Downloading {url} ...")
+                done = False
                 try:
                     resp = requests.get(url, timeout=600)
                     resp.raise_for_status()
-                    dest.write_bytes(resp.content)
-                except requests.RequestException as exc:
-                    done = False
-                    if cfg.file_base_url_alt:
-                        alt = f"{cfg.file_base_url_alt.rstrip('/')}/{name}"
-                        try:
-                            resp = requests.get(alt, timeout=600)
-                            resp.raise_for_status()
+                    if not _is_lfs_pointer(resp.content):
+                        dest.write_bytes(resp.content)
+                        done = True
+                except requests.RequestException:
+                    pass
+                if not done and cfg.file_base_url_alt:
+                    alt = f"{cfg.file_base_url_alt.rstrip('/')}/{name}"
+                    try:
+                        resp = requests.get(alt, timeout=600)
+                        resp.raise_for_status()
+                        if not _is_lfs_pointer(resp.content):
                             dest.write_bytes(resp.content)
                             done = True
-                        except requests.RequestException:
-                            pass
-                    if not done:
-                        if key == "mutations":
-                            print(f"  failed ({exc}); fetching mutations via cBioPortal API.")
-                            _fetch_mutations_api(cfg, dest)
-                        else:
-                            raise
+                    except requests.RequestException:
+                        pass
+                if not done:
+                    if key == "mutations":
+                        print("  unavailable via datahub; fetching mutations via cBioPortal API.")
+                        _fetch_mutations_api(cfg, dest)
+                    else:
+                        raise FileNotFoundError(
+                            f"Could not download {name} from {url}"
+                            + (f" or {cfg.file_base_url_alt}" if cfg.file_base_url_alt else "")
+                        )
+            elif _is_lfs_pointer(dest.read_bytes()):
+                # A previous run stored a Git LFS pointer instead of real data.
+                dest.unlink()
+                if key == "mutations":
+                    _fetch_mutations_api(cfg, dest)
+                else:
+                    raise FileNotFoundError(f"{dest} is a Git LFS pointer, not data")
             member_sha[name] = _sha256_file(dest)
         missing = [n for n in used_names if not (raw_dir / n).exists()]
         if missing:
