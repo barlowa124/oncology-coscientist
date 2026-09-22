@@ -53,17 +53,24 @@ def check_proportional_hazards(cph, train_df: pd.DataFrame) -> dict:
 
 def check_leakage(train_df: pd.DataFrame, expr_train: pd.DataFrame,
                   feature_cols: dict, n_genes: int,
-                  used_gene_cols: list, used_impute: dict, used_scale: dict) -> dict:
+                  used_gene_cols: list, used_impute: dict, used_scale: dict,
+                  excluded_genes: list | tuple = ()) -> dict:
     """Recompute train-only gene selection, imputation stats, and standardization; compare."""
     detail = {}
     ok = True
-    num_cols = [c for c in feature_cols if feature_cols[c] == "numeric"]
-    for col in num_cols:
-        rec = float(train_df[col].median())
+    for col, kind in feature_cols.items():
+        if kind == "numeric" or kind == "binary":
+            rec = float(train_df[col].median()) if train_df[col].notna().any() else 0.0
+        elif kind == "categorical":
+            modes = train_df[col].mode()
+            rec = modes.iloc[0] if len(modes) else None
+        else:
+            continue
         detail[f"impute_{col}_matches"] = bool(rec == used_impute.get(col))
         ok &= detail[f"impute_{col}_matches"]
     if expr_train is not None and n_genes:
-        recomputed_genes = list(expr_train.var().sort_values(ascending=False).head(n_genes).index)
+        avail = expr_train.drop(columns=[g for g in excluded_genes if g in expr_train.columns])
+        recomputed_genes = list(avail.var().sort_values(ascending=False).head(n_genes).index)
         detail["gene_selection_matches"] = recomputed_genes == used_gene_cols
         ok &= detail["gene_selection_matches"]
         sub = expr_train[used_gene_cols].copy()

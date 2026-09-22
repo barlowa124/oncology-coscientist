@@ -14,8 +14,9 @@ from oncocs import checks, evidence
 from oncocs.config import DEFAULT_ROOT, load_cohort
 from oncocs.data.download import download_cohort, load_manifest
 from oncocs.data.harmonize import harmonize
-from oncocs.data.load import (load_clinical_patient, load_clinical_sample,
-                              load_expression, load_mutations)
+from oncocs.data.load import (load_cases_sequenced, load_clinical_patient,
+                              load_clinical_sample, load_expression,
+                              load_mutations)
 from oncocs.models.cox import cox_summary, cox_survival, fit_cox
 from oncocs.models.metrics import evaluate
 from oncocs.models.rsf import fit_rsf, rsf_risk, rsf_survival
@@ -30,6 +31,7 @@ def _harmonized(cfg, root):
         load_clinical_sample(cfg, root),
         load_expression(cfg, root),
         load_mutations(cfg, root),
+        load_cases_sequenced(cfg, root),
     )
     return patients, expr, report
 
@@ -62,6 +64,9 @@ def _run_pipeline(cfg, root, seed):
                                    cfg.config_sha256)
     record["missingness"] = report["missingness"]
     record["dropped"] = report["dropped"]
+    record["n_patients"] = report.get("n_patients_final")
+    record["n_patients_with_expression"] = report.get("n_patients_with_expression")
+    record["n_unsequenced_patients"] = report.get("n_unsequenced_patients")
 
     run_checks = [
         checks.check_split_integrity(split, patients.index),
@@ -82,7 +87,8 @@ def _run_pipeline(cfg, root, seed):
         include_expr = fs == "clinical_expression"
         X_tr, X_te, meta = prepare_features(
             patients, expr if include_expr else None, train_ids, test_ids,
-            kinds, cfg.n_expression_genes if include_expr else 0, include_expr)
+            kinds, cfg.n_expression_genes if include_expr else 0, include_expr,
+            cfg.excluded_genes)
 
         train_df = X_tr.assign(os_months=patients.loc[train_ids, "os_months"],
                                event=patients.loc[train_ids, "event"])
@@ -98,6 +104,7 @@ def _run_pipeline(cfg, root, seed):
                 cox_clinical = cph
                 cox_clinical_df = train_df
                 cox_out["hazard_ratios"] = cox_summary(cph)
+                cox_out["reference_levels"] = meta["reference_levels"]
         except Exception as exc:
             cox_out = {"metrics": {"abstained": True, "reason": f"fit/eval failed: {exc}"}}
         models[f"cox/{fs}"] = cox_out
@@ -108,13 +115,20 @@ def _run_pipeline(cfg, root, seed):
             rsf_metrics = evaluate(y_train, y_test, rsf_risk(rsf, X_te),
                                    rsf_survival(rsf, X_te, grid), grid)
             models[f"rsf/{fs}"] = {"metrics": rsf_metrics}
+            if include_expr:
+                models[f"rsf/{fs}"]["gene_cols"] = meta["gene_cols"]
+                cox_out["gene_cols"] = meta["gene_cols"]
         except Exception as exc:
             models[f"rsf/{fs}"] = {"metrics": {"abstained": True, "reason": f"fit/eval failed: {exc}"}}
+            if include_expr:
+                models[f"rsf/{fs}"]["gene_cols"] = meta["gene_cols"]
+                cox_out["gene_cols"] = meta["gene_cols"]
 
         if fs == "clinical_expression":
             run_checks.append(checks.check_leakage(
                 patients.loc[train_ids], expr.loc[train_ids], kinds,
-                cfg.n_expression_genes, meta["gene_cols"], meta["impute"], meta["scale"]))
+                cfg.n_expression_genes, meta["gene_cols"], meta["impute"], meta["scale"],
+                cfg.excluded_genes))
 
     if cox_clinical is not None:
         run_checks.append(checks.check_proportional_hazards(cox_clinical, cox_clinical_df))
@@ -148,6 +162,9 @@ def _run_pipeline(cfg, root, seed):
 def cmd_run(args):
     cfg = load_cohort(args.cohort, args.data_dir)
     record = _run_pipeline(cfg, args.data_dir, args.seed)
+    if record.get("git_dirty"):
+        print("WARNING: git working tree is dirty; results are not bound to a clean commit.",
+              file=sys.stderr)
     path = evidence.write_results(record, Path(args.data_dir))
     print(f"Results written to {path}")
     for c in record["checks"]:

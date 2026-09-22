@@ -39,3 +39,18 @@ def load_expression(cfg: CohortConfig, root: Path | str = DEFAULT_ROOT) -> pd.Da
 def load_mutations(cfg: CohortConfig, root: Path | str = DEFAULT_ROOT) -> pd.DataFrame:
     path = Path(root) / "data" / cfg.cohort / "raw" / cfg.files["mutations"]
     return pd.read_csv(path, sep="\t", comment="#", dtype=str, low_memory=False)
+
+
+def load_cases_sequenced(cfg: CohortConfig, root: Path | str = DEFAULT_ROOT) -> set | None:
+    """Sample ids present in case_lists/cases_sequenced.txt; None if not configured."""
+    rel = cfg.files.get("cases_sequenced")
+    if not rel:
+        return None
+    path = Path(root) / "data" / cfg.cohort / "raw" / rel
+    if not path.exists():
+        raise FileNotFoundError(f"Sequenced case list not found: {path}")
+    ids = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.strip().startswith("case_list_ids:"):
+            ids.update(line.split(":", 1)[1].split())
+    return ids

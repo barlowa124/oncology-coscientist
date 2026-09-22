@@ -20,6 +20,7 @@ def harmonize(
     clinical_sample: pd.DataFrame,
     expression: pd.DataFrame,
     mutations: pd.DataFrame,
+    sequenced: set | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
     """Return (patient_table, expression_per_patient, report).
 
@@ -87,6 +88,11 @@ def harmonize(
     for g in cfg.mutation_genes:
         cp[f"mut_{g}"] = cp["sample_id"].isin(mut_samples.get(g, set())).astype(float)
         covar_cols[f"mut_{g}"] = "binary"
+    if sequenced is not None:
+        unseq = ~cp["sample_id"].isin(sequenced)
+        report["n_unsequenced_patients"] = int(unseq.sum())
+        for g in cfg.mutation_genes:
+            cp.loc[unseq, f"mut_{g}"] = np.nan
 
     # --- missingness report + drop covariates with >20% missing ---
     for col in list(covar_cols):

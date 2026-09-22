@@ -8,13 +8,14 @@ import pandas as pd
 def prepare_features(patients: pd.DataFrame, expr: pd.DataFrame | None,
                      train_ids: list, test_ids: list,
                      covariate_kinds: dict, n_expression_genes: int,
-                     include_expression: bool):
+                     include_expression: bool, excluded_genes: list | tuple = ()):
     """Return X_train, X_test, meta. All statistics fitted on train only."""
-    meta = {"feature_kinds": {}, "impute": {}, "scale": {}, "gene_cols": []}
+    meta = {"feature_kinds": {}, "impute": {}, "scale": {}, "gene_cols": [],
+            "reference_levels": {}}
     train = patients.loc[train_ids]
     test = patients.loc[test_ids]
 
-    cols, tr_frames, te_frames = [], [], []
+    tr_frames, te_frames = [], []
     for col, kind in sorted(covariate_kinds.items()):
         if kind == "numeric" or kind == "binary":
             fill = float(train[col].median()) if train[col].notna().any() else 0.0
@@ -22,21 +23,28 @@ def prepare_features(patients: pd.DataFrame, expr: pd.DataFrame | None,
             tr_frames.append(train[col].fillna(fill))
             te_frames.append(test[col].fillna(fill))
             meta["feature_kinds"][col] = kind
-        else:  # categorical -> dummies with train-derived categories
+        else:  # categorical: mode-impute on train, k-1 dummies vs first sorted level
             cats = sorted(train[col].dropna().unique())
-            for c in cats:
+            ref = cats[0] if cats else None
+            modes = train[col].mode()
+            mode = modes.iloc[0] if len(modes) else ref
+            meta["impute"][col] = mode
+            meta["reference_levels"][col] = ref
+            tr_col = train[col].fillna(mode)
+            te_col = test[col].fillna(mode)
+            for c in cats[1:]:
                 name = f"{col}_{c}"
-                tr_frames.append((train[col] == c).astype(float).rename(name))
-                te_frames.append((test[col] == c).astype(float).rename(name))
+                tr_frames.append((tr_col == c).astype(float).rename(name))
+                te_frames.append((te_col == c).astype(float).rename(name))
                 meta["feature_kinds"][name] = "dummy"
-            # train rows with missing covariate get all-zero dummies
 
     X_train = pd.concat(tr_frames, axis=1).astype(float)
     X_test = pd.concat(te_frames, axis=1).astype(float)[X_train.columns]
 
     if include_expression and expr is not None and n_expression_genes:
-        expr_train = expr.loc[train_ids]
-        expr_test = expr.loc[test_ids]
+        drop = [g for g in excluded_genes if g in expr.columns]
+        expr_train = expr.loc[train_ids].drop(columns=drop)
+        expr_test = expr.loc[test_ids].drop(columns=drop)
         gene_cols = list(expr_train.var().sort_values(ascending=False)
                          .head(n_expression_genes).index)
         meta["gene_cols"] = gene_cols

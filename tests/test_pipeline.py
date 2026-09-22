@@ -87,6 +87,69 @@ def test_missing_covariate_dropped_over_20pct(tmp_path):
     assert "sex" not in patients.columns
 
 
+def test_reference_levels_and_mode_imputation(tmp_path):
+    from tests.conftest import _make_cohort_dir
+    from oncocs.prep import prepare_features
+    root = _make_cohort_dir(tmp_path)
+    cfg = load_cohort("synth", root)
+    cp = load_clinical_patient(cfg, root)
+    cp.loc[cp.sample(frac=0.1, random_state=2).index, "SEX"] = ""  # below 20% drop
+    patients, expr, report = harmonize(cfg, cp, load_clinical_sample(cfg, root),
+                                       load_expression(cfg, root), load_mutations(cfg, root))
+    train = patients.index[:200].tolist()
+    test = patients.index[200:].tolist()
+    X_tr, _, meta = prepare_features(patients, expr, train, test,
+                                     report["covariates_used"], 0, False)
+    stage_cats = sorted(patients.loc[train, "stage"].dropna().unique())
+    sex_cats = sorted(patients.loc[train, "sex"].dropna().unique())
+    assert meta["reference_levels"]["stage"] == stage_cats[0]
+    assert meta["reference_levels"]["sex"] == sex_cats[0]
+    assert sorted(c for c in X_tr.columns if c.startswith("sex_")) == \
+        [f"sex_{c}" for c in sex_cats[1:]]
+    assert sorted(c for c in X_tr.columns if c.startswith("stage_")) == \
+        [f"stage_{c}" for c in stage_cats[1:]]
+    mode = patients.loc[train, "sex"].mode().iloc[0]
+    assert meta["impute"]["sex"] == mode
+    missing_idx = patients.loc[train].index[patients.loc[train, "sex"].isna()]
+    assert len(missing_idx) > 0
+    for c in sex_cats[1:]:
+        assert (X_tr.loc[missing_idx, f"sex_{c}"] == float(c == mode)).all()
+
+
+def test_unsequenced_samples_get_nan_flags(synth_root):
+    cfg = load_cohort("synth", synth_root)
+    cs = load_clinical_sample(cfg, synth_root)
+    patients, _, _ = _patients(synth_root)
+    kept_sample = patients["sample_id"].iloc[0]
+    seq = set(cs["SAMPLE_ID"]) - {kept_sample}
+    patients2, _, report = harmonize(
+        cfg, load_clinical_patient(cfg, synth_root), cs,
+        load_expression(cfg, synth_root), load_mutations(cfg, synth_root),
+        sequenced=seq)
+    pid = patients.index[0]
+    assert pd.isna(patients2.loc[pid, "mut_TP53"])
+    assert report["n_unsequenced_patients"] == 1
+    assert report["missingness"]["mut_TP53"]["missing"] >= 1
+
+
+def test_excluded_genes_never_selected(synth_root):
+    from oncocs.prep import prepare_features
+    patients, expr, report = _patients(synth_root)
+    expr = expr.copy()
+    expr["XIST"] = np.random.default_rng(0).normal(8, 50, len(expr))  # max variance
+    train = patients.index[:200].tolist()
+    test = patients.index[200:].tolist()
+    _, _, meta = prepare_features(patients, expr, train, test,
+                                  report["covariates_used"], 50, True,
+                                  excluded_genes=["XIST"])
+    assert "XIST" not in meta["gene_cols"]
+    res = checks.check_leakage(patients.loc[train], expr.loc[train],
+                               report["covariates_used"], 50,
+                               meta["gene_cols"], meta["impute"], meta["scale"],
+                               excluded_genes=["XIST"])
+    assert res["passed"]
+
+
 # ---------- checks ----------
 
 def test_leakage_catches_overlap_and_global_gene_selection(synth_root):

@@ -55,12 +55,16 @@ def download_cohort(cfg: CohortConfig, root: Path | str = DEFAULT_ROOT) -> dict:
             names = {}
             for member in tar.getmembers():
                 base = Path(member.name).name
-                if base in used_names:
+                match = next((v for v in used_names
+                              if member.name.endswith("/" + v) or base == v), None)
+                if match:
                     fh = tar.extractfile(member)
                     data = fh.read()
-                    (raw_dir / base).write_bytes(data)
-                    member_sha[base] = _sha256_bytes(data)
-                    names[base] = member.name
+                    dest = raw_dir / match
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    dest.write_bytes(data)
+                    member_sha[match] = _sha256_bytes(data)
+                    names[match] = member.name
             missing = [n for n in used_names if n not in names]
             if missing:
                 raise FileNotFoundError(
@@ -76,6 +80,7 @@ def download_cohort(cfg: CohortConfig, root: Path | str = DEFAULT_ROOT) -> dict:
         source = "files"
         for key, name in cfg.files.items():
             dest = raw_dir / name
+            dest.parent.mkdir(parents=True, exist_ok=True)
             if not dest.exists():
                 url = f"{cfg.file_base_url.rstrip('/')}/{name}"
                 print(f"Downloading {url} ...")
