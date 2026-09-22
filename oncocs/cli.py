@@ -7,13 +7,15 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 from sksurv.util import Surv
 
-from oncocs import checks, evidence
+from oncocs import checks, evidence, schemas
 from oncocs.config import DEFAULT_ROOT, load_cohort
 from oncocs.data.download import download_cohort, load_manifest
 from oncocs.data.harmonize import harmonize
 from oncocs.data.load import (
+    _read_clinical,
     load_cases_sequenced,
     load_clinical_patient,
     load_clinical_sample,
@@ -190,6 +192,132 @@ def cmd_run(args):
         print(f"  {name}: {tag}")
 
 
+MISSING_TOKENS_FOR_QC = {"", "NA", "N/A", "[Not Available]", "[Not Evaluated]",
+                         "[Unknown]", "[Pending]", "[Discrepancy]", "NaN"}
+
+
+def _missing_counts(df):
+    """Per-column count/fraction of missing tokens or NA."""
+    out = {}
+    for col in df.columns:
+        s = df[col]
+        m = s.isna() | s.astype("string").isin(MISSING_TOKENS_FOR_QC)
+        if int(m.sum()):
+            out[col] = {"missing": int(m.sum()), "fraction": round(float(m.mean()), 4)}
+    return out
+
+
+def cmd_qc(args):
+    root = Path(args.data_dir)
+    cfg = load_cohort(args.cohort, root)
+    raw = root / "data" / cfg.cohort / "raw"
+
+    frames = {
+        "clinical_patient": _read_clinical(raw / cfg.files["clinical_patient"]),
+        "clinical_sample": _read_clinical(raw / cfg.files["clinical_sample"]),
+        "mutations": pd.read_csv(raw / cfg.files["mutations"], sep="\t", comment="#",
+                                 dtype=str, low_memory=False),
+    }
+    expr_path = raw / cfg.files["expression"]
+    if not expr_path.exists():
+        expr_path = raw / cfg.files.get("expression_fallback", "")
+    frames["expression"] = pd.read_csv(expr_path, sep="\t", comment="#",
+                                       dtype=str, low_memory=False)
+
+    schema_fns = {
+        "clinical_patient": schemas.clinical_patient_schema,
+        "clinical_sample": schemas.clinical_sample_schema,
+        "mutations": schemas.mutations_schema,
+        "expression": schemas.expression_schema,
+    }
+    qc = {"cohort": cfg.cohort,
+          "schema_conformance": {},
+          "missingness": {},
+          "domain_violations": {},
+          "duplicates": {},
+          "sample_patient_conflicts": {},
+          "split_integrity": {}}
+    for name, df in frames.items():
+        try:
+            schema_fns[name](cfg).validate(df)
+            qc["schema_conformance"][name] = {"ok": True}
+        except Exception as exc:  # pandera SchemaError or subclass
+            qc["schema_conformance"][name] = {"ok": False,
+                                              "error": f"{type(exc).__name__}: {exc}"}
+    for name in ("clinical_patient", "clinical_sample"):
+        qc["missingness"][name] = _missing_counts(frames[name])
+
+    cp = frames["clinical_patient"]
+    pid, sid = cfg.patient_id, cfg.columns["sample_id"]
+    spid = cfg.columns["sample_patient_id"]
+
+    # value-domain violations on mapped categoricals
+    allowed = {
+        cfg.os_status: set(cfg.os_status_map.values()),
+    }
+    if cfg.covariates.get("stage"):
+        allowed[cfg.covariates["stage"]] = set(cfg.stage_map)
+    for col, ok_vals in allowed.items():
+        if col not in cp.columns:
+            continue
+        s = cp[col].fillna("").astype(str).str.strip()
+        bad = s[~s.isin(ok_vals) & ~s.isin(MISSING_TOKENS_FOR_QC)]
+        if len(bad):
+            qc["domain_violations"][col] = bad.value_counts().to_dict()
+
+    qc["duplicates"] = {
+        "clinical_patient_patient_id": int(cp[pid].duplicated().sum()),
+        "clinical_sample_sample_id": int(frames["clinical_sample"][sid].duplicated().sum()),
+    }
+
+    cs = frames["clinical_sample"]
+    valid_pid = set(cp[pid].dropna())
+    qc["sample_patient_conflicts"] = {
+        "sample_patient_id_not_in_patient_table":
+            int((~cs[spid].isin(valid_pid)).sum()),
+        "patients_with_multiple_primary_samples":
+            int((cs[cs[sid].astype(str).str.endswith(cfg.sample_type_suffix)]
+                 .groupby(spid).size() > 1).sum()),
+    }
+
+    try:
+        seq = load_cases_sequenced(cfg, root)
+        qc["n_unsequenced_patients"] = int(
+            (~cs[cs[sid].astype(str).str.endswith(cfg.sample_type_suffix)][sid]
+             .isin(seq)).sum())
+    except Exception:
+        qc["n_unsequenced_patients"] = None
+
+    try:
+        split = load_split(cfg, root)
+        chk = checks.check_split_integrity(split, set(cp[pid].dropna()))
+        data_ids = set(cp[pid].dropna())
+        chk["detail"]["test_ids_all_in_data"] = \
+            all(t in data_ids for t in split["test_ids"])
+        qc["split_integrity"] = chk
+    except Exception as exc:
+        qc["split_integrity"] = {"passed": None, "detail": {"error": str(exc)}}
+
+    runs = sorted((root / "results" / cfg.cohort).glob("*"), key=lambda p: p.stat().st_mtime)
+    out = (runs[-1] if runs else root / "results" / cfg.cohort / "qc") / "qc.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(qc, indent=2, default=str) + "\n", encoding="utf-8")
+
+    print(f"QC {cfg.cohort}: wrote {out}")
+    for name, s in qc["schema_conformance"].items():
+        print(f"  schema {name}: {'OK' if s['ok'] else 'FAIL ' + s['error'][:80]}")
+    for frame, cols in qc["missingness"].items():
+        print(f"  missingness {frame}: {len(cols)} columns with missing values")
+    for col, viols in qc["domain_violations"].items():
+        print(f"  domain violations {col}: {viols}")
+    print(f"  duplicates: {qc['duplicates']}")
+    print(f"  sample->patient conflicts: {qc['sample_patient_conflicts']}")
+    print(f"  unsequenced primary samples: {qc['n_unsequenced_patients']}")
+    si = qc["split_integrity"]
+    print(f"  split integrity: {si.get('passed')} {si.get('detail', {})}")
+    return 0
+
+
 def cmd_verify(args):
     root = Path(args.data_dir)
     record = json.loads(Path(args.results).read_text())
@@ -358,6 +486,10 @@ def main(argv=None):
     r.add_argument("--cohort", required=True)
     r.add_argument("--seed", type=int, required=True)
     r.set_defaults(fn=cmd_run)
+
+    q = sub.add_parser("qc")
+    q.add_argument("--cohort", required=True)
+    q.set_defaults(fn=cmd_qc)
 
     v = sub.add_parser("verify")
     v.add_argument("results")

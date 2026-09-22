@@ -208,6 +208,30 @@ across 3 files: LFS-pointer detection in the download fallback, replay
 comparison for rejected reports, and clean abstention when no covariates
 survive missingness).
 
+### Data acquisition and QC
+
+Acquisition order (S3 archive → per-file DataHub → raw GitHub fallback →
+cBioPortal API for mutations), SHA-256 manifesting, LFS-pointer detection,
+harmonization, missingness filtering, and split freezing are documented in
+[docs/DATA_PIPELINE.md](docs/DATA_PIPELINE.md). `oncocs qc --cohort X` audits
+already-downloaded raw data and writes `results/<cohort>/<run>/qc.json`:
+
+```
+$ python -m oncocs qc --cohort luad        # abridged
+QC luad: wrote results/luad/3097990b11d8/qc.json
+  schema clinical_patient: OK
+  schema clinical_sample: OK
+  schema mutations: OK
+  schema expression: OK
+  missingness clinical_patient: 34 columns with missing values
+  duplicates: {'clinical_patient_patient_id': 0, 'clinical_sample_sample_id': 0}
+  unsequenced primary samples: 0
+  split integrity: True {'hash_match': True, 'overlap_count': 0, ...}
+```
+
+Loaders validate every frame against pandera schemas (`oncocs/schemas.py`);
+a malformed frame raises `SchemaError` rather than being silently coerced.
+
 ## Docker
 
 ```bash

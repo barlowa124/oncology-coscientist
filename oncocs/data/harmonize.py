@@ -125,4 +125,6 @@ def harmonize(
     report["n_patients_final"] = int(len(patients))
     report["n_patients_with_expression"] = int(expr_pat.notna().any(axis=1).sum())
     report["covariates_used"] = covar_cols
+    from oncocs.schemas import validate_survival_frame
+    validate_survival_frame(patients, cfg)
     return patients, expr_pat, report

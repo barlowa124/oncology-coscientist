@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from oncocs import schemas
 from oncocs.config import DEFAULT_ROOT, CohortConfig
 
 
@@ -15,11 +16,15 @@ def _read_clinical(path: Path) -> pd.DataFrame:
 
 
 def load_clinical_patient(cfg: CohortConfig, root: Path | str = DEFAULT_ROOT) -> pd.DataFrame:
-    return _read_clinical(Path(root) / "data" / cfg.cohort / "raw" / cfg.files["clinical_patient"])
+    df = _read_clinical(Path(root) / "data" / cfg.cohort / "raw" / cfg.files["clinical_patient"])
+    schemas.clinical_patient_schema(cfg).validate(df)
+    return df
 
 
 def load_clinical_sample(cfg: CohortConfig, root: Path | str = DEFAULT_ROOT) -> pd.DataFrame:
-    return _read_clinical(Path(root) / "data" / cfg.cohort / "raw" / cfg.files["clinical_sample"])
+    df = _read_clinical(Path(root) / "data" / cfg.cohort / "raw" / cfg.files["clinical_sample"])
+    schemas.clinical_sample_schema(cfg).validate(df)
+    return df
 
 
 def load_expression(cfg: CohortConfig, root: Path | str = DEFAULT_ROOT) -> pd.DataFrame:
@@ -33,12 +38,17 @@ def load_expression(cfg: CohortConfig, root: Path | str = DEFAULT_ROOT) -> pd.Da
     dropcols = [c for c in ("Entrez_Gene_Id",) if c in df.columns]
     df = df.drop(columns=dropcols)
     expr = df.apply(pd.to_numeric, errors="coerce").T
+    if expr.isna().any().any():
+        bad = expr.columns[expr.isna().any()].tolist()[:10]
+        raise ValueError(f"expression frame contains non-numeric values in {bad}")
     return np.log2(expr + 1)
 
 
 def load_mutations(cfg: CohortConfig, root: Path | str = DEFAULT_ROOT) -> pd.DataFrame:
     path = Path(root) / "data" / cfg.cohort / "raw" / cfg.files["mutations"]
-    return pd.read_csv(path, sep="\t", comment="#", dtype=str, low_memory=False)
+    df = pd.read_csv(path, sep="\t", comment="#", dtype=str, low_memory=False)
+    schemas.mutations_schema(cfg).validate(df)
+    return df
 
 
 def load_cases_sequenced(cfg: CohortConfig, root: Path | str = DEFAULT_ROOT) -> set | None:
