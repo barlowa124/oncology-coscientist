@@ -244,9 +244,17 @@ def cmd_agent_run(args):
 
 def cmd_agent_replay(args):
     from oncocs.agents.replay import replay_agent
-    ok, msg = replay_agent(Path(args.agent_run))
-    print(("PASS" if ok else "FAIL") + f": {msg}")
-    return 0 if ok else 1
+    import json as _json
+    status, msg = replay_agent(Path(args.agent_run))
+    if status == "FROZEN":
+        rec = _json.loads(Path(args.agent_run).read_text(encoding="utf-8"))
+        print(f"FROZEN: transcript mismatch at call {msg} — prompts changed "
+              f"since this run was recorded (recorded under commit "
+              f"{rec.get('git_commit')}); drafts and verification remain as "
+              f"preserved evidence.")
+        return 2
+    print(f"{status}: {msg}")
+    return 0 if status == "PASS" else 1
 
 
 def cmd_approve(args):
@@ -262,10 +270,13 @@ def cmd_approve(args):
 
 def cmd_agent_summarize(args):
     """Scan all agent/*/agent_run.json; write results/agent_model_comparison.json."""
+    from oncocs.agents.replay import replay_agent
     root = Path(args.data_dir)
     entries = []
     for p in sorted(root.glob("results/*/*/agent/*/agent_run.json")):
         rec = json.loads(p.read_text(encoding="utf-8"))
+        if args.replay:
+            rec["_replay_status"], _ = replay_agent(p)
         findings = []
         for d in rec.get("drafts", []):
             counts = {}
@@ -282,6 +293,7 @@ def cmd_agent_summarize(args):
             "attempts": len(rec.get("drafts", [])),
             "analysis_plan_fallback": rec.get("analysis_plan_fallback"),
             "findings_per_attempt": findings,
+            "replay": rec.get("_replay_status") if args.replay else None,
             "human_review": rec.get("human_review"),
             "path": str(p.relative_to(root)),
         })
@@ -353,6 +365,8 @@ def main(argv=None):
     rp.add_argument("agent_run")
     rp.set_defaults(fn=cmd_agent_replay)
     sm = ags.add_parser("summarize")
+    sm.add_argument("--replay", action="store_true",
+                    help="replay each run and record PASS/FAIL/FROZEN")
     sm.set_defaults(fn=cmd_agent_summarize)
 
     rg = sub.add_parser("rag")

@@ -28,6 +28,7 @@
           }
         }
       ],
+      "replay": "PASS",
       "human_review": null,
       "path": "results\\brca\\24528d61379c\\agent\\052fa2c286da\\agent_run.json"
     },
@@ -61,6 +62,7 @@
           }
         }
       ],
+      "replay": "FROZEN",
       "human_review": null,
       "path": "results\\brca\\24528d61379c\\agent\\4afbc74b7bc5\\agent_run.json"
     },
@@ -80,6 +82,7 @@
           }
         }
       ],
+      "replay": "FROZEN",
       "human_review": null,
       "path": "results\\brca\\24528d61379c\\agent\\b81f24db3970\\agent_run.json"
     },
@@ -105,6 +108,7 @@
           }
         }
       ],
+      "replay": "PASS",
       "human_review": null,
       "path": "results\\gbm\\2beaf67dc0b2\\agent\\0fb3e28f52d6\\agent_run.json"
     },
@@ -136,6 +140,7 @@
           }
         }
       ],
+      "replay": "FROZEN",
       "human_review": null,
       "path": "results\\gbm\\2beaf67dc0b2\\agent\\ce75cc3fd75a\\agent_run.json"
     },
@@ -155,6 +160,7 @@
           }
         }
       ],
+      "replay": "FROZEN",
       "human_review": null,
       "path": "results\\luad\\3097990b11d8\\agent\\76a00fdba97d\\agent_run.json"
     },
@@ -188,6 +194,7 @@
           }
         }
       ],
+      "replay": "PASS",
       "human_review": null,
       "path": "results\\luad\\3097990b11d8\\agent\\777c93997c7a\\agent_run.json"
     },
@@ -207,6 +214,7 @@
           }
         }
       ],
+      "replay": "FROZEN",
       "human_review": {
         "decision": "rejected",
         "by": "Austin Barlow (lead review)",

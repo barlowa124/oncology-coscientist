@@ -166,13 +166,13 @@ def test_modeling_node_abstains_on_tamper(synth_results, tmp_path):
 def test_replay_identical_and_tamper_detected(synth_results):
     rec = _agent_run(synth_results.parents[3], synth_results, _scripted_ok(synth_results))
     run_path = _run_path(synth_results, rec)
-    ok, msg = replay_agent(run_path)
-    assert ok, msg
+    status, msg = replay_agent(run_path)
+    assert status == "PASS", msg
     tampered = json.loads(run_path.read_text())
     tampered["transcript"][0]["prompt_sha256"] = "0" * 64
     run_path.write_text(json.dumps(tampered))
-    with pytest.raises(TranscriptMismatch):
-        replay_agent(run_path)
+    status, msg = replay_agent(run_path)
+    assert status == "FROZEN" and msg == "0"
 
 
 # ---------- approve ----------

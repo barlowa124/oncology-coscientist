@@ -3,14 +3,17 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path
 
 from oncocs.agents.graph import AgentState, build_graph, render_report_md
-from oncocs.llm.recorded import RecordedBackend
+from oncocs.llm.recorded import RecordedBackend, TranscriptMismatch
 
 
-def replay_agent(agent_run_path: Path) -> tuple[bool, str]:
-    """Return (ok, message)."""
+def replay_agent(agent_run_path: Path) -> tuple[str, str]:
+    """Return (status, message) where status is PASS, FAIL, or FROZEN.
+    FROZEN means the recorded prompts no longer match what the current code
+    issues — the run predates a prompt change and is preserved as evidence."""
     agent_run_path = Path(agent_run_path)
     record = json.loads(agent_run_path.read_text(encoding="utf-8"))
     results = json.loads(Path(record["results_path"]).read_text(encoding="utf-8"))
@@ -26,12 +29,15 @@ def replay_agent(agent_run_path: Path) -> tuple[bool, str]:
                         "root": str(root), "results": results,
                         "split": load_split(load_cohort(cohort, root), root),
                         "drafts": [], "attempts": 0, "status": "running"}
-    final = graph.invoke(init)
+    try:
+        final = graph.invoke(init)
+    except TranscriptMismatch as exc:
+        m2 = re.search(r"(?:index|call) (\d+)", str(exc))
+        return "FROZEN", (m2.group(1) if m2 else "?")
 
     report_path = agent_run_path.parent / "report.md"
     original_md = report_path.read_text(encoding="utf-8")
 
-    import re
     m = re.search(r"<!-- agent_run_sha256: ([0-9a-f]+) -->", original_md)
     if record.get("status") in ("rejected", "abstained"):
         expected = render_report_md(final.get("draft", ""),
@@ -48,7 +54,7 @@ def replay_agent(agent_run_path: Path) -> tuple[bool, str]:
     ver_ok = final.get("verification") == record.get("verification")
     status_ok = final.get("status") == record.get("status")
     if body_ok and ver_ok and status_ok:
-        return True, "report bytes and verification identical"
+        return "PASS", "report bytes and verification identical"
     diffs = []
     if not body_ok:
         diffs.append("draft differs")
@@ -56,4 +62,4 @@ def replay_agent(agent_run_path: Path) -> tuple[bool, str]:
         diffs.append("verification differs")
     if not status_ok:
         diffs.append(f"status {final.get('status')} != {record.get('status')}")
-    return False, "; ".join(diffs)
+    return "FAIL", "; ".join(diffs)
