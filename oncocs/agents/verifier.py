@@ -52,8 +52,14 @@ def extract_numbers(text: str) -> list[dict]:
 
 
 def _checks_section(draft: str) -> str:
-    m = re.search(r"## Checks and abstentions(.*?)(?=\n## |\Z)", draft, re.S)
+    m = re.search(r"##\s*Checks and abstentions\s*\n(.*?)(?=\n\s*##|\Z)",
+                  draft, re.S | re.I)
     return m.group(1) if m else ""
+
+
+def _has_section(draft: str, title: str) -> bool:
+    return bool(re.search(r"^##\s*" + re.escape(title[3:]) + r"\s*$",
+                          draft, re.I | re.M))
 
 
 def verify_draft(draft: str, flat_values: dict[str, float],
@@ -97,7 +103,7 @@ def verify_draft(draft: str, flat_values: dict[str, float],
             forbidden.append(f"significant (unverified p-value near offset {m.start()})")
 
     for sec in REQUIRED_SECTIONS:
-        if sec not in draft:
+        if not _has_section(draft, sec):
             missing.append(sec)
 
     abstention_missing = False

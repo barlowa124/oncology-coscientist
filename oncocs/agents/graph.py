@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path
 from typing import TypedDict
 
@@ -32,6 +33,29 @@ class AgentState(TypedDict, total=False):
     verification: dict
     attempts: int
     status: str
+
+
+def _parse_json(text: str) -> dict:
+    """Parse a JSON object, tolerating ```json fences and surrounding prose."""
+    s = text.strip()
+    if s.startswith("```"):
+        s = re.sub(r"^```(?:json)?\s*", "", s)
+        s = re.sub(r"\s*```\s*$", "", s)
+    try:
+        return json.loads(s)
+    except json.JSONDecodeError:
+        start = s.find("{")
+        if start == -1:
+            raise
+        depth = 0
+        for i, ch in enumerate(s[start:], start):
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return json.loads(s[start:i + 1])
+        raise
 
 
 def _chat(backend, system: str, user: str, seed: int | None,
@@ -104,14 +128,14 @@ def build_graph(backend, seed: int | None = None):
                 '{"focus_models": [...], "claims_to_make": [...], "must_disclose": [...]}')
         resp = _chat(backend, "You are a planning agent. Reply with JSON only.", user, seed)
         try:
-            plan = json.loads(resp)
+            plan = _parse_json(resp)
         except json.JSONDecodeError as exc:
             resp2 = _chat(backend, "You are a planning agent. Reply with JSON only.",
                           user, seed,
                           extra_user=f"Your previous reply was not valid JSON ({exc}). "
                                      "Return ONLY the JSON object.")
             try:
-                plan = json.loads(resp2)
+                plan = _parse_json(resp2)
                 return {"analysis_plan": plan}
             except json.JSONDecodeError:
                 return {"analysis_plan": {
@@ -162,7 +186,8 @@ def build_graph(backend, seed: int | None = None):
             + "\n\nCohort summary:\n" + state["cohort_summary"]
             + "\n\nAnalysis plan:\n" + json.dumps(state["analysis_plan"])
             + "\n\nWrite a markdown report with exactly these sections, in order:\n"
-            "## Cohort\n## Models and metrics\n## Checks and abstentions\n## Limitations"
+            "## Cohort\n## Models and metrics\n## Checks and abstentions\n## Limitations\n"
+            "The headers must appear verbatim as shown above (## + exact title)."
         )
         extra = None
         if state.get("verification") and not state["verification"].get("passed", True):
@@ -176,8 +201,10 @@ def build_graph(backend, seed: int | None = None):
                 findings.append(f"  - missing section: {s}")
             if v.get("abstention_missing"):
                 findings.append("  - a failed check must be disclosed as an abstention")
-            extra = ("The following problems were found in your draft. Remove or "
-                     "correct them:\n" + "\n".join(findings))
+            extra = ("Here is your previous draft:\n\n" + state["draft"] +
+                     "\n\nThe following problems were found. Return the complete "
+                     "corrected report, not a description of changes:\n"
+                     + "\n".join(findings))
         return {"draft": _chat(backend, system, user, seed, extra_user=extra),
                 "attempts": attempts}
 
@@ -224,12 +251,34 @@ UNAPPROVED_BANNER = "> **UNAPPROVED DRAFT — pending human review**"
 
 
 def render_report_md(draft: str, agent_run_sha256: str | None = None,
-                     approval: dict | None = None) -> str:
+                     approval: dict | None = None,
+                     status: str = "draft_pending_approval",
+                     drafts: list | None = None) -> str:
+    meta = f"<!-- agent_run_sha256: {agent_run_sha256} -->\n" if agent_run_sha256 else ""
+    if status == "rejected":
+        lines = [f"> **REJECTED — no verified report was produced after "
+                 f"{len(drafts or [])} attempts.**", ""]
+        for d in drafts or []:
+            v = d["verification"]
+            findings = []
+            findings += [f"unverified number {u['token']!r} ({u['context']})"
+                         for u in v.get("unverified_numbers", [])]
+            findings += [f"forbidden phrasing: {f}" for f in v.get("forbidden", [])]
+            findings += [f"missing section: {s}" for s in v.get("missing_sections", [])]
+            if v.get("abstention_missing"):
+                findings.append("failed check not disclosed as abstention")
+            lines.append(f"- Attempt {d['attempt']}: "
+                         + ("; ".join(findings) or "unknown failure"))
+        lines += ["", "All drafts with their verification results are preserved "
+                      "in `agent_run.json`."]
+        return meta + "\n".join(lines) + "\n"
+    if status == "abstained":
+        return meta + "> **ABSTAINED — recorded evidence hashes no longer match " \
+                      "the files on disk; no report produced.**\n"
     if approval:
         banner = f"> Approved by {approval['by']} on {approval['timestamp'][:10]}"
     else:
         banner = UNAPPROVED_BANNER
-    meta = f"<!-- agent_run_sha256: {agent_run_sha256} -->\n" if agent_run_sha256 else ""
     return f"{meta}{banner}\n\n{draft}\n"
 
 
@@ -273,7 +322,8 @@ def run_agent(cohort: str, results_path: Path, backend, seed: int | None,
     }
     run_path = out_dir / "agent_run.json"
     sha = agent_run_sha(record)
-    report_md = render_report_md(final.get("draft", ""), agent_run_sha256=sha)
+    report_md = render_report_md(final.get("draft", ""), agent_run_sha256=sha,
+                                 status=record["status"], drafts=record["drafts"])
     (out_dir / "report.md").write_text(report_md, encoding="utf-8")
     record["final_report_sha256"] = hashlib.sha256(report_md.encode()).hexdigest()
     run_path.write_text(json.dumps(record, indent=2, default=str) + "\n",

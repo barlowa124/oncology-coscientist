@@ -9,6 +9,7 @@ import pytest
 from oncocs.agents.approve import approve
 from oncocs.agents.graph import run_agent, UNAPPROVED_BANNER
 from oncocs.agents.replay import replay_agent
+from oncocs.agents.graph import _parse_json
 from oncocs.agents.verifier import verify_draft
 from oncocs.llm.recorded import (RecordedBackend, ScriptedBackend,
                                  TranscriptMismatch)
@@ -51,6 +52,11 @@ def test_verifier_rejects_fabricated_number():
 def test_verifier_rejects_forbidden_and_missing():
     assert "outperforms" in verify_draft(GOOD + " outperforms baselines", FLAT, [])["forbidden"]
     assert "## Cohort" in verify_draft(GOOD.replace("## Cohort", "## Data"), FLAT, [])["missing_sections"]
+
+
+def test_verifier_sections_case_insensitive():
+    d = GOOD.replace("## Models and metrics", "## Models and Metrics  ")
+    assert verify_draft(d, FLAT, [])["passed"]
 
 
 def test_verifier_abstention_and_significant():
@@ -101,11 +107,40 @@ def test_graph_rejected_after_three_attempts(synth_results):
     assert all(not d["verification"]["passed"] for d in rec["drafts"])
 
 
-def test_analysis_json_fallback(synth_results):
+def test_analysis_json_fenced_and_fallback(synth_results):
+    fenced = '```json\n{"focus_models": ["cox/clinical"], "claims_to_make": [], ' \
+             '"must_disclose": []}\n```'
+    rec = _agent_run(synth_results.parents[3], synth_results,
+                     ["cohort text", fenced, *_scripted_ok(synth_results)[2:]])
+    assert rec["analysis_plan"]["focus_models"] == ["cox/clinical"]
+    assert not rec["analysis_plan_fallback"]
     responses = ["cohort text", "not json at all", "still not json",
                  *_scripted_ok(synth_results)[2:]]
     rec = _agent_run(synth_results.parents[3], synth_results, responses)
     assert rec["analysis_plan_fallback"] is True
+
+
+def test_retry_prompt_contains_previous_draft(synth_results):
+    bad = "## Cohort\n0.99999 fabricated.\n"
+    responses = ["cohort text", '{"focus_models": []}',
+                 bad, bad, bad]
+    rec = _agent_run(synth_results.parents[3], synth_results, responses)
+    assert rec["status"] == "rejected"
+    # transcript calls: 0 cohort, 1 analysis, 2..4 report attempts
+    second_report_msgs = rec["transcript"][3]["messages"]
+    assert any(bad in m["content"] for m in second_report_msgs)
+
+
+def test_rejected_rendering_and_approve_refusal(synth_results):
+    bad = "## Cohort\n0.99999 fabricated.\n"
+    rec = _agent_run(synth_results.parents[3], synth_results,
+                     ["cohort text", '{"focus_models": []}', bad, bad, bad])
+    assert rec["status"] == "rejected"
+    md = (synth_results.parent / "report.md").read_text(encoding="utf-8")
+    assert "REJECTED" in md and UNAPPROVED_BANNER not in md
+    assert "agent_run.json" in md
+    with pytest.raises(ValueError):
+        approve(synth_results.parent / "agent_run.json", by="tester")
 
 
 def test_modeling_node_abstains_on_tamper(synth_results, tmp_path):
