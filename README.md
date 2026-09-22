@@ -1,28 +1,42 @@
-# oncocs — cohort-agnostic survival-analysis pipeline on public TCGA data
+# oncocs — cohort-agnostic survival analysis with verified LLM reporting
 
-Reproducible survival analysis of TCGA cohorts from cBioPortal DataHub: harmonized
-patient-level data, frozen stratified splits, deterministic Cox PH and Random Survival
-Forest models, survival-specific metrics, and assumption checks that produce explicit
-abstentions rather than silently wrong numbers. Every run writes a self-verifying
-evidence record.
+oncocs runs reproducible survival analyses on public TCGA cohorts from
+cBioPortal DataHub, then lets a local LLM *describe* the results while
+deterministic code does every computation. An LLM proposes and writes the
+report prose; a claim verifier binds every number in that prose to the recorded
+computation — including which model each number belongs to — and a human
+approval gate signs off. Every LLM call is recorded and can be replayed
+byte-for-byte.
 
-## Quick start
-
-```bash
-pip install -e .[dev]
-python -m oncocs download --cohort luad
-python -m oncocs split --cohort luad --seed 20240601
-python -m oncocs run --cohort luad --seed 20240601
-python -m oncocs verify results/luad/<run_id>/results.json
+```mermaid
+flowchart LR
+    download --> split --> run --> results[results.json<br/>evidence record]
+    results --> verify
+    results --> cohort_agent --> context_agent[context_agent<br/>BM25 over PDQ corpus]
+    context_agent --> analysis_agent --> modeling_node[modeling_node<br/>hash recheck]
+    modeling_node --> report_agent --> claim_verifier
+    claim_verifier -->|fail, <3 attempts| report_agent
+    claim_verifier -->|pass| human_gate[human approve / reject]
+    claim_verifier -->|3 failures| rejected[rejected run<br/>drafts preserved]
+    human_gate --> report_md[report.md]
 ```
 
-Cohorts are config-driven (`cohorts/<id>.yaml`); adding a cohort is a yaml file, not code.
+## Results across three cohorts (seed 20240601)
 
-## LUAD results
+| Cohort | n | Events train/test | Checks | Best Harrell C (test) |
+|---|---|---|---|---|
+| LUAD | 501 | 126 / 55 | all 5 passed | 0.647 — cox/clinical |
+| GBM | 580 | 335 / 143 | 2 passed; all 4 models abstained | — |
+| BRCA | 1071 | 106 / 45 | all 5 passed | 0.708 — cox/clinical |
 
-TCGA LUAD PanCancer Atlas 2018, seed 20240601, 501 patients after harmonization
-(350 train / 151 test; 126 / 55 events). All five checks passed; no abstentions.
-Every kept sample had mutation sequencing data (0 unsequenced).
+- GBM has no AJCC stage in this study (`stage: null`; recorded as
+  `omitted_covariates`), 49% of patients lack age/sex, and 33% are unsequenced.
+  Every covariate exceeded the 20% missingness filter, so the run records a
+  `covariates` check failure and all four models abstain — a legitimate result.
+- BRCA adds `STAGE IIIC` / `STAGE X` source values; `STAGE X` ("stage cannot be
+  assessed") stays unmapped and is counted as missing (19 patients, 1.8%).
+
+LUAD in detail (all checks passed; references: stage I, sex Female):
 
 | Model / features | Harrell C | Uno C | AUC 12m | AUC 24m | AUC 36m | IBS 6–36m |
 |---|---|---|---|---|---|---|
@@ -31,76 +45,132 @@ Every kept sample had mutation sequencing data (0 unsequenced).
 | Cox / clinical + expression | 0.643 | 0.632 | 0.711 | 0.666 | 0.628 | 0.157 |
 | RSF / clinical + expression | 0.632 | 0.615 | 0.671 | 0.672 | 0.609 | 0.153 |
 
-Top clinical Cox hazard ratios (reference: stage I, sex Female):
+Top clinical Cox hazard ratios: stage IV 3.27 (1.66–6.44, p=0.0006),
+stage III 2.62 (1.75–3.93, p<0.0001), mut STK11 1.64 (1.06–2.53, p=0.027),
+stage II 1.54 (1.06–2.24, p=0.025). Adding the top-50 variance expression genes
+did not improve over clinical features; `excluded_genes` /
+`excluded_gene_patterns` exist because sex-linked genes dominated the variance
+ranking while sex is already a covariate.
 
-| Covariate | HR | 95% CI | p |
-|---|---|---|---|
-| stage IV | 3.27 | 1.66–6.44 | 0.0006 |
-| stage III | 2.62 | 1.75–3.93 | <0.0001 |
-| mut STK11 | 1.64 | 1.06–2.53 | 0.027 |
-| stage II | 1.54 | 1.06–2.24 | 0.025 |
+## What the verifier caught
 
-Observations:
+- **`agent/7b433c558b79` (LUAD, gemma3:4b, human-rejected):** the report's
+  `rsf/clinical_expression` block listed `cox/clinical_expression`'s metrics and
+  omitted `rsf/clinical`. Every number was real, so the numeric-only verifier
+  passed it; a human reviewer rejected it. This run motivated scoped
+  verification: numbers after a model-key mention must match that model's
+  subtree (`misattributed`), and model-only numbers in unscoped text fail
+  (`unscoped_model_numbers`).
+- **`agent/777c93997c7a` (LUAD, gemma3:12b):** rejected — repeatedly listed
+  `cox/clinical_expression` metrics (0.157, 0.711, 0.666) under `cox/clinical`.
+- **`agent/ce75cc3fd75a` (GBM, gemma3:4b):** rejected — all four models
+  abstained but the draft never disclosed the abstention.
+- **`agent/4afbc74b7bc5` (BRCA, gemma3:12b):** rejected — wrote the IBS window
+  label "6-36 months" in unscoped text; `6` exists only under `models.*`, so the
+  scoped verifier flagged it as an unscoped model number.
 
-- Adding the top-50 variance expression genes did not improve over clinical features:
-  Cox C 0.643 vs 0.647; RSF C 0.632 vs 0.639.
-- The `excluded_genes` list and `excluded_gene_patterns` (`^CYorf`, `^TTTY`) in
-  `cohorts/luad.yaml` exist because sex-linked genes (XIST, RPS4Y1, DDX3Y, CYorf15A/B,
-  etc.) dominated the variance ranking while sex is already a covariate.
+## Model comparison (gemma3:4b vs gemma3:12b, seed 20240601, temp 0)
 
-## All cohorts (seed 20240601)
+`results/agent_model_comparison.json` is regenerated by `oncocs agent summarize`.
 
-| Cohort | n | Events train/test | Checks | Best Harrell C (test) |
-|---|---|---|---|---|
-| LUAD | 501 | 126 / 55 | all 5 passed | 0.647 — cox/clinical |
-| GBM | 580 | 335 / 143 | 2 passed, all 4 models abstained | — |
-| BRCA | 1071 | 106 / 45 | all 5 passed | 0.708 — cox/clinical |
+| Cohort | gemma3:4b | gemma3:12b |
+|---|---|---|
+| LUAD | passed in 1 attempt (later human-rejected for misattribution) | rejected after 3 (persistent misattribution) |
+| GBM | rejected after 3 (abstention not disclosed) | passed in 2 attempts |
+| BRCA | passed in 1 attempt | rejected after 3 (unscoped `6` in "6-36 months") |
 
-- GBM has no AJCC stage in this study (`stage: null` in `cohorts/gbm.yaml`;
-  recorded as `omitted_covariates`), and 49% of patients lack age/sex plus 33%
-  lack mutation sequencing in the source files. Every covariate exceeded the 20%
-  missingness filter, so the run records a `covariates` check failure and all
-  four models abstain — a legitimate outcome, not an error.
-- BRCA adds `STAGE IIIC` and `STAGE X` source values. `STAGE X` ("stage cannot be
-  assessed") is left unmapped and counted as missing (19 patients, 1.8%).
+More parameters did not monotonically help: 12b fixed the abstention
+disclosure on GBM but introduced or retained scoped-attribution errors on the
+other two cohorts.
 
-## Generality: cost of adding a cohort
+## Quick start
 
-GBM and BRCA were added as yaml-only cohorts (`cohorts/gbm.yaml`,
-`cohorts/brca.yaml`) — no cohort-specific Python. The only `oncocs/` changes
-between the phase-3 start commit and the end (78 lines across 3 files) were
-generic fixes any cohort could trigger: Git LFS pointer detection in the
-per-file download fallback, replay comparison for rejected/abstained reports,
-and a clean abstention path when no covariates survive the missingness filter.
+```bash
+pip install -e .[dev]
+python -m oncocs download --cohort luad          # archive or per-file fallback
+python -m oncocs split --cohort luad --seed 20240601
+python -m oncocs run --cohort luad --seed 20240601
+python -m oncocs verify results/luad/<run_id>/results.json
 
-## Agent reports
+python -m oncocs rag fetch                       # NCI PDQ corpus (~92 KB)
+python -m oncocs agent run --cohort luad --results results/luad/<run_id>/results.json \
+    --backend ollama --model gemma3:4b --seed 20240601
+python -m oncocs agent replay results/luad/<run_id>/agent/<agent_id>/agent_run.json
+python -m oncocs approve <agent_run.json> --by "<name>"   # or: reject --reason "..."
+python -m oncocs agent summarize                 # results/agent_model_comparison.json
+python -m oncocs serve --port 8000               # review API on 127.0.0.1
+```
 
-`python -m oncocs agent run --cohort <id> --results <results.json> --backend
-ollama --model gemma3:4b` runs a LangGraph pipeline (cohort summary → analysis
-plan → report draft → deterministic claim verifier, up to 3 attempts) and writes
-`results/<id>/<run_id>/agent/<agent_run_id>/{agent_run.json,report.md}`.
-`agent replay <agent_run.json>` replays the recorded transcript and asserts the
-report and verification are identical; `approve`/`reject` are explicit human
-gates that rewrite the report banner.
+Cohorts are config-driven (`cohorts/<id>.yaml`); adding a cohort is a yaml file,
+not code. GBM and BRCA were added yaml-only; the only `oncocs/` changes between
+the phase-3 start and end were generic fixes any cohort could trigger (78 lines
+across 3 files: LFS-pointer detection in the download fallback, replay
+comparison for rejected reports, and clean abstention when no covariates
+survive missingness).
 
-The verifier checks every number in the draft against the recorded results, and
-numbers appearing after a model-key mention are scoped to that model's subtree —
-a number that only matches a different model is reported as `misattributed` and
-fails verification.
+## Docker
 
-### Human-rejected run
+```bash
+docker build -t oncocs .
+docker run -v "$PWD/results:/app/results" -v "$PWD/data:/app/data" \
+           -v "$PWD/splits:/app/splits" -v "$PWD/rag:/app/rag" -p 8000:8000 oncocs
+```
 
-`results/luad/3097990b11d8/agent/7b433c558b79/` is preserved as the motivating
-example: gemma3:4b produced a report whose `rsf/clinical_expression` block
-listed `cox/clinical_expression`'s metrics and omitted `rsf/clinical` entirely.
-Every number was real, so the original numeric verifier passed it; a human
-reviewer rejected it via `oncocs reject`. The scoped verifier now segments the
-draft by model-key mentions and fails that exact pattern (covered by tests).
+The container serves the review API over saved runs. The LLM backend (Ollama)
+is **not** in the image; agent runs happen outside the container.
+
+## Evidence record
+
+Every run writes `results/<cohort>/<run_id>/results.json` containing git
+commit/dirty state, data manifest hash, split hash, config hash, package
+versions, missingness/drop counts, omitted covariates, check outcomes, and
+per-model metrics (or abstention reasons). `oncocs verify` recomputes the
+hashes and reruns the pipeline. Agent runs write
+`results/<cohort>/<run_id>/agent/<agent_run_id>/{agent_run.json,report.md}` —
+the full prompt transcript (replayable via `RecordedBackend`), every draft with
+its verification, the analysis plan, status, and human-review metadata.
+
+## API
+
+`GET /cohorts`, `GET /runs`, `GET /runs/{cohort}/{run_id}`,
+`GET /runs/{cohort}/{run_id}/agent`, `GET /agent/{cohort}/{run_id}/{agent_id}/report`
+and `.../agent_run`, plus `POST .../approve` / `POST .../reject`
+(`{by, note|reason}`; conflicts return 409). The API reads saved runs and
+records human decisions only — it cannot trigger pipeline or agent runs.
 
 ## Limitations
 
-- Research/education only. Not validated for clinical, diagnostic, prognostic, or
-  treatment decisions.
-- Public retrospective data (TCGA); results reflect the dataset, not any clinical claim.
-- Checks can abstain a model's metrics (e.g. proportional-hazards violations) —
-  abstention is a result, not an error.
+- Research/education only. Not validated for clinical, diagnostic, prognostic,
+  or treatment decisions.
+- Public retrospective TCGA data; results reflect the dataset, not any clinical
+  claim.
+- The verifier checks number provenance and model attribution, forbidden
+  phrasing, section structure, abstention disclosure, and citation integrity.
+  It does **not** check the scientific correctness of prose — that is what the
+  human gate is for.
+- Local small-parameter models are used for drafting; failure modes observed
+  include misattributed model blocks and missing abstention disclosure.
+
+## Data and licensing
+
+- Data: cBioPortal DataHub public TCGA PanCancer Atlas 2018 studies
+  (LUAD, GBM, BRCA). Downloaded per study; manifest records per-file SHA-256.
+- Context corpus: NCI PDQ summaries (U.S. public domain). Suggested citation:
+  *National Cancer Institute. PDQ(R) Cancer Information Summary. Bethesda, MD:
+  National Cancer Institute. Retrieved from cancer.gov.*
+- Code: MIT (see LICENSE).
+
+## Layout
+
+```
+cohorts/<id>.yaml                cohort config (study, columns, covariates, rag_docs)
+data/<cohort>/{manifest.json,raw/}  raw files + sha256 manifest (raw is gitignored)
+splits/<cohort>.json             frozen stratified split
+results/<cohort>/<run_id>/results.json    evidence record
+results/<cohort>/<run_id>/agent/<id>/     agent_run.json + report.md
+rag/corpus/                      PDQ text + manifest (license, citation, sha256)
+oncocs/                          package: data, models, checks, evidence,
+                                 agents (graph/verifier/replay/approve),
+                                 rag (fetch/retrieve), api (FastAPI review)
+tests/                           offline tests (synthetic fixtures)
+```
