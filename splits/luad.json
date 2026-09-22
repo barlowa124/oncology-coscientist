@@ -510,6 +510,7 @@
     "TCGA-NJ-A4YP",
     "TCGA-NJ-A55A"
   ],
-  "data_manifest_sha256": "e7ddd52e1bd14bfe8bda432d15ad20042957eaae2e30997c3a49708b15a02be3",
-  "split_sha256": "15711ebb28d88df98124140a4ea0dadc884d654ff5a6c756df6fbe14af91991f"
+  "data_manifest_sha256": "8c688ec6acd21905b6e37c7439966ed4205520741cf5aaa5c4fafc7561872bfb",
+  "split_sha256": "15711ebb28d88df98124140a4ea0dadc884d654ff5a6c756df6fbe14af91991f",
+  "supersedes": "15711ebb28d88df98124140a4ea0dadc884d654ff5a6c756df6fbe14af91991f"
 }
