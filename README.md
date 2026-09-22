@@ -81,6 +81,13 @@ ranking while sex is already a covariate.
 - **`agent/4918eaf618e7` (LUAD, gemma3:4b):** rejected — described a
   concordance index as a calibration metric, then cited model-only numbers
   with no model attribution.
+- **`agent/a911996a2e14` (LUAD, gemma3:12b):** rejected — fabricated a cohort
+  size of 602 for a 501-patient cohort on every attempt, in addition to
+  persistent metric misattribution.
+- **`agent/a706c3f76993` (GBM, gemma3:4b):** rejected — after the first
+  attempt was flagged for not disclosing the all-model abstention, attempts
+  2 and 3 invented metric values (harrell_c = 0.45, etc.) for models that
+  had abstained.
 
 ## Model comparison (gemma3:4b vs gemma3:12b, seed 20240601, temp 0)
 
@@ -91,12 +98,12 @@ responses reproduce the same report and verdict under the current code):
 
 | Cohort | gemma3:4b | gemma3:12b |
 |---|---|---|
-| LUAD | rejected after 3 — C-index mislabeled as calibration, then unscoped model numbers (`4918eaf618e7`) | rejected after 3 — persistent misattribution (`777c93997c7a`) |
-| GBM | rejected after 3 — invented citation tags, undisclosed abstention (`ea53fcd852c2`) | passed in 2 attempts (`0fb3e28f52d6`) |
-| BRCA | rejected after 3 — invented citation tag, C-index mislabeled as calibration (`5d5a01a0e471`) | passed in 3 attempts (`052fa2c286da`) |
+| LUAD | rejected after 3 — unscoped model numbers, C-index mislabeled as calibration, unverified "significant" (`98d9952a9150`) | rejected after 3 — fabricated cohort size (602 for a 501-patient cohort), persistent misattribution (`a911996a2e14`) |
+| GBM | rejected after 3 — undisclosed abstention, then fabricated metric values for the abstained models (`a706c3f76993`) | rejected after 3 — abstention never disclosed (`c654c99fa00f`) |
+| BRCA | rejected after 3 — "robust" and unverified "significant" (`dd95bfcd2b8b`) | rejected after 3 — persistent misattribution (`14dee8f5d071`) |
 
-Under identical prompts, 12b produced verified drafts on 2 of 3 cohorts; 4b
-produced none.
+Under identical prompts, neither model produced a verified draft on any
+cohort in this round.
 
 ### Earlier runs (pre-prompt-change, kept as evidence)
 
@@ -105,9 +112,18 @@ FROZEN runs predate a prompt change and are not re-verified:
 - LUAD `76a00fdba97d` (4b): passed verifier; **human-rejected** for the
   misattribution described above.
 - LUAD `7b433c558b79` (4b): same semantic defect, first recorded instance.
+- LUAD `4918eaf618e7` (4b): rejected — C-index mislabeled as calibration,
+  then unscoped model numbers.
+- LUAD `777c93997c7a` (12b): rejected — persistent misattribution.
 - GBM `ce75cc3fd75a` (4b): rejected — abstention not disclosed.
+- GBM `ea53fcd852c2` (4b): rejected — invented citation tags, undisclosed
+  abstention.
+- GBM `0fb3e28f52d6` (12b): passed verifier in 2 attempts, unapproved.
 - BRCA `b81f24db3970` (4b): passed verifier, unapproved.
+- BRCA `5d5a01a0e471` (4b): rejected — invented citation tag, C-index
+  mislabeled as calibration.
 - BRCA `4afbc74b7bc5` (12b): rejected — the "6-36" label false positive.
+- BRCA `052fa2c286da` (12b): passed verifier in 3 attempts, unapproved.
 
 ## Quick start
 
