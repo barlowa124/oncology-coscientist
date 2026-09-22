@@ -123,5 +123,12 @@
     "missing_sections": [],
     "abstention_missing": false
   },
-  "final_report_sha256": "70b4e40593d280fd0bb21a59f45339b564fb2eac387fb341883ad1f79d108926"
+  "final_report_sha256": "70b4e40593d280fd0bb21a59f45339b564fb2eac387fb341883ad1f79d108926",
+  "human_review": {
+    "decision": "rejected",
+    "by": "barlowa124 (lead review)",
+    "timestamp": "2026-09-22T16:10:44.263699+00:00",
+    "reason": "All numbers verify and the abstention is disclosed, but the Limitations section interprets the proportional_hazards and convergence check failures as evidence that the PH assumption may not hold and that fitting was unstable. The recorded details say 'clinical Cox model did not fit' and 'no covariates survived the missingness filter' \u2014 both failures are downstream of the covariates check, not independent findings. Semantic misreading of recorded check detail; verifier cannot catch this.",
+    "agent_run_sha256": "eba344cf1de02b7bed14a4bd34017aeda5d68c5837df4f6a1778ce4597da9462"
+  }
 }

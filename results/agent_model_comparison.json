@@ -302,7 +302,13 @@
         }
       ],
       "replay": "PASS",
-      "human_review": null,
+      "human_review": {
+        "decision": "rejected",
+        "by": "barlowa124 (lead review)",
+        "timestamp": "2026-09-22T16:10:44.263699+00:00",
+        "reason": "All numbers verify and the abstention is disclosed, but the Limitations section interprets the proportional_hazards and convergence check failures as evidence that the PH assumption may not hold and that fitting was unstable. The recorded details say 'clinical Cox model did not fit' and 'no covariates survived the missingness filter' \u2014 both failures are downstream of the covariates check, not independent findings. Semantic misreading of recorded check detail; verifier cannot catch this.",
+        "agent_run_sha256": "eba344cf1de02b7bed14a4bd34017aeda5d68c5837df4f6a1778ce4597da9462"
+      },
       "path": "results\\gbm\\2beaf67dc0b2\\agent\\ba8da12d0f19\\agent_run.json"
     },
     {
@@ -552,7 +558,7 @@
       "replay": "FROZEN",
       "human_review": {
         "decision": "rejected",
-        "by": "Austin Barlow (lead review)",
+        "by": "barlowa124 (lead review)",
         "timestamp": "2026-09-22T04:01:05.450586+00:00",
         "reason": "Model label/number mismatch: block titled rsf/clinical_expression reports cox/clinical_expression metrics; rsf/clinical omitted. Numeric verifier passed; attribution was not checked.",
         "agent_run_sha256": "7c2603a997525ecaf21745779dd14e683f3b46e169934d5f01bb7198c62da094"

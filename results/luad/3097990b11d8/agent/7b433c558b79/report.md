@@ -1,5 +1,5 @@
 <!-- agent_run_sha256: 7c2603a997525ecaf21745779dd14e683f3b46e169934d5f01bb7198c62da094 -->
-> **REJECTED BY HUMAN REVIEWER (Austin Barlow (lead review))** — Model label/number mismatch: block titled rsf/clinical_expression reports cox/clinical_expression metrics; rsf/clinical omitted. Numeric verifier passed; attribution was not checked.
+> **REJECTED BY HUMAN REVIEWER (barlowa124 (lead review))** — Model label/number mismatch: block titled rsf/clinical_expression reports cox/clinical_expression metrics; rsf/clinical omitted. Numeric verifier passed; attribution was not checked.
 
 ## Cohort
 
