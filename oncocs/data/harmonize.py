@@ -6,7 +6,9 @@ import pandas as pd
 
 from oncocs.config import CohortConfig
 
-MISSING_TOKENS = {"", "NA", "N/A", "NaN", "nan", "null", "Not Available", "[Not Available]", "[Not Evaluated]", "[Pending]", "[Discrepancy]", "[Completed]", "unknown"}
+MISSING_TOKENS = {"", "NA", "N/A", "NaN", "nan", "null", "Not Available",
+                  "[Not Available]", "[Not Evaluated]", "[Pending]",
+                  "[Discrepancy]", "[Completed]", "unknown"}
 
 
 def _clean(series: pd.Series) -> pd.Series:
@@ -39,7 +41,9 @@ def harmonize(
     deceased_val = cfg.os_status_map.get("deceased", "1:DECEASED")
     living_val = cfg.os_status_map.get("living", "0:LIVING")
     status_clean = _clean(cp[cfg.os_status])
-    cp["event"] = np.where(status_clean == deceased_val, 1, np.where(status_clean == living_val, 0, np.nan))
+    cp["event"] = np.where(
+        status_clean == deceased_val, 1,
+        np.where(status_clean == living_val, 0, np.nan))
 
     n0 = len(cp)
     bad = cp["os_months"].isna() | cp["event"].isna()
@@ -60,10 +64,12 @@ def harmonize(
     report["dropped"]["extra_primary_samples"] = int((multi - 1).sum())
     report["patients_with_multiple_primary_samples"] = int(len(multi))
     prim = prim.drop_duplicates(subset=[sample_pid], keep="first")
-    sample_for_patient = dict(zip(prim[sample_pid], prim[sid]))
+    sample_for_patient = dict(zip(prim[sample_pid], prim[sid], strict=True))
 
     cp = cp[cp[pid].isin(sample_for_patient)]
-    report["dropped"]["no_primary_sample"] = int(n0 - report["dropped"]["missing_os"] - report["dropped"]["nonpositive_os_months"] - len(cp))
+    report["dropped"]["no_primary_sample"] = int(
+        n0 - report["dropped"]["missing_os"]
+        - report["dropped"]["nonpositive_os_months"] - len(cp))
     cp["sample_id"] = cp[pid].map(sample_for_patient)
 
     # --- covariates ---
@@ -98,7 +104,8 @@ def harmonize(
     # --- missingness report + drop covariates with >20% missing ---
     for col in list(covar_cols):
         frac = float(cp[col].isna().mean()) if len(cp) else 0.0
-        report["missingness"][col] = {"missing": int(cp[col].isna().sum()), "fraction": round(frac, 4)}
+        report["missingness"][col] = {"missing": int(cp[col].isna().sum()),
+                                      "fraction": round(frac, 4)}
         if frac > 0.20:
             report["dropped_covariates"].append(col)
             del covar_cols[col]

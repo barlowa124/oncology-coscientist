@@ -88,7 +88,7 @@ def create_app(root: Path) -> FastAPI:
         try:
             approve(aj, by=body.by, note=body.note)
         except ValueError as exc:
-            raise HTTPException(409, str(exc))
+            raise HTTPException(409, str(exc)) from exc
         return {"status": "approved", "by": body.by}
 
     @app.post("/agent/{cohort}/{run_id}/{agent_id}/reject")
@@ -98,7 +98,7 @@ def create_app(root: Path) -> FastAPI:
         try:
             reject(aj, by=body.by, reason=body.reason)
         except ValueError as exc:
-            raise HTTPException(409, str(exc))
+            raise HTTPException(409, str(exc)) from exc
         return {"status": "rejected", "by": body.by}
 
     return app

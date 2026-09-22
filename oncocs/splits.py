@@ -5,11 +5,10 @@ import hashlib
 import json
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-from oncocs.config import CohortConfig, DEFAULT_ROOT
+from oncocs.config import DEFAULT_ROOT, CohortConfig
 
 
 def split_sha256(train_ids: list, test_ids: list) -> str:

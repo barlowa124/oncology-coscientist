@@ -7,7 +7,8 @@ from sksurv.ensemble import RandomSurvivalForest
 from sksurv.util import Surv
 
 
-def fit_rsf(df: pd.DataFrame, seed: int, duration: str = "os_months", event: str = "event") -> RandomSurvivalForest:
+def fit_rsf(df: pd.DataFrame, seed: int, duration: str = "os_months",
+            event: str = "event") -> RandomSurvivalForest:
     X = df.drop(columns=[duration, event])
     y = Surv.from_dataframe(event, duration, df)
     rsf = RandomSurvivalForest(n_estimators=300, min_samples_leaf=10,

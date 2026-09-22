@@ -1,13 +1,17 @@
 """API tests on the synthetic fixture (TestClient, no server needed)."""
 from __future__ import annotations
 
-import json
-
 import pytest
 from fastapi.testclient import TestClient
 
 from oncocs.api.app import create_app
-from tests.test_agents import SEED, _agent_run, _run_path, _scripted_ok, synth_results
+from tests.test_agents import (
+    _agent_run,
+    _scripted_ok,
+)
+from tests.test_agents import (
+    synth_results as synth_results,  # re-export: registers the fixture
+)
 
 
 @pytest.fixture()

@@ -5,6 +5,7 @@ import hashlib
 import json
 import re
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TypedDict
 
@@ -30,6 +31,7 @@ class AgentState(TypedDict, total=False):
     passages: dict
     analysis_plan: dict
     analysis_plan_fallback: bool
+    analysis_plan_dropped_focus_models: list
     draft: str
     drafts: list
     verification: dict
@@ -83,7 +85,8 @@ def render_table(results: dict, split: dict) -> str:
     lines.append("missingness: " + json.dumps(results["missingness"]))
     lines.append("checks:")
     for c in results["checks"]:
-        lines.append(f"  {c['name']}: {'PASS' if c['passed'] else 'FAIL'} {json.dumps(c['detail'])}")
+        verdict = "PASS" if c["passed"] else "FAIL"
+        lines.append(f"  {c['name']}: {verdict} {json.dumps(c['detail'])}")
     for name, out in results["models"].items():
         m = out["metrics"]
         if m.get("abstained"):
@@ -110,7 +113,8 @@ def build_graph(backend, seed: int | None = None):
             f"missingness: {json.dumps(r['missingness'])}\n"
             f"dropped: {json.dumps(r['dropped'])}\n"
             f"n_train: {state['split']['n_train']}, n_test: {state['split']['n_test']}\n"
-            f"patients: {r.get('n_patients')}, with_expression: {r.get('n_patients_with_expression')}, "
+            f"patients: {r.get('n_patients')}, "
+            f"with_expression: {r.get('n_patients_with_expression')}, "
             f"unsequenced: {r.get('n_unsequenced_patients')}\n"
             f"checks: {json.dumps([(c['name'], c['passed']) for c in r['checks']])}\n\n"
             "Write a 1-2 paragraph description of this cohort, then a bulleted list of "
@@ -148,7 +152,6 @@ def build_graph(backend, seed: int | None = None):
                                      "Return ONLY the JSON object.")
             try:
                 plan = _parse_json(resp2)
-                return {"analysis_plan": plan}
             except json.JSONDecodeError:
                 return {"analysis_plan": {
                             "focus_models": menu["models"],
@@ -156,7 +159,11 @@ def build_graph(backend, seed: int | None = None):
                             "must_disclose": [c["name"] for c in r["checks"]
                                               if not c["passed"]]},
                         "analysis_plan_fallback": True}
-        return {"analysis_plan": plan}
+        focus = [m for m in plan.get("focus_models", []) if m in r["models"]]
+        dropped = [m for m in plan.get("focus_models", []) if m not in r["models"]]
+        plan["focus_models"] = focus
+        return {"analysis_plan": plan,
+                "analysis_plan_dropped_focus_models": dropped}
 
     def modeling_node(state: AgentState) -> dict:
         """Deterministic: confirm recorded hashes still match files on disk."""
@@ -183,14 +190,14 @@ def build_graph(backend, seed: int | None = None):
 
     def report_agent(state: AgentState) -> dict:
         attempts = state.get("attempts", 0) + 1
-        r = state["results"]
         system = (
             "You write cautious scientific summaries. Every number in your output must "
             "come from the supplied results table exactly as displayed. If any check "
             "failed, state the corresponding metrics as abstained. Forbidden phrasing: "
             "'clinically validated', 'proves', 'causes', 'should be used', 'outperforms', "
             "'state-of-the-art', 'robust', and 'significant' without an adjacent "
-            "verifiable p-value. Do not name models, versions, or patient identifiers. "
+            "verifiable p-value. Do not name the language model, software versions, "
+            "or patient identifiers. "
             "Describe each check by its recorded outcome and detail; do not infer "
             "assumption validity from confidence intervals. "
             "Metric glossary: harrell_c and uno_c are concordance indices measuring "
@@ -215,11 +222,12 @@ def build_graph(backend, seed: int | None = None):
         if state.get("passages"):
             listed = "\n".join(f"[{tag}] \"{text}\""
                                for tag, text in state["passages"].items())
+            example_tag = next(iter(state["passages"]))
             user += (
                 "\n\nRetrieved public-domain passages you may cite:\n" + listed +
                 "\n\nOptionally append a '## Context' section after Limitations. "
                 "In it, any sentence quoting a passage must end with its citation "
-                "tag, e.g. \"...quoted text...\" [PDQ:doc#0]. Quote verbatim only; "
+                f"tag, e.g. \"...quoted text...\" [{example_tag}]. Quote verbatim only; "
                 "never cite a tag not listed above; numbers in Context must come "
                 "from the cited passage, not the results table.")
         extra = None
@@ -274,7 +282,7 @@ def build_graph(backend, seed: int | None = None):
         return out
 
     def route_after_verify(state: AgentState):
-        if state["status"] == "draft_pending_approval" or state["status"] == "rejected":
+        if state.get("status") in ("draft_pending_approval", "rejected"):
             return "human_gate"
         return "report_agent"
 
@@ -369,7 +377,7 @@ def run_agent(cohort: str, results_path: Path, backend, seed: int | None,
 
     record = {
         "agent_run_id": agent_run_id,
-        "timestamp": evidence.datetime.now(evidence.timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "cohort": cohort,
         "results_path": str(results_path),
         "results_sha256": results_sha,
@@ -384,6 +392,8 @@ def run_agent(cohort: str, results_path: Path, backend, seed: int | None,
         "cohort_summary": final.get("cohort_summary"),
         "analysis_plan": final.get("analysis_plan"),
         "analysis_plan_fallback": final.get("analysis_plan_fallback", False),
+        "analysis_plan_dropped_focus_models":
+            final.get("analysis_plan_dropped_focus_models", []),
         "status": final.get("status"),
         "verification": final.get("verification"),
         "final_report_sha256": None,

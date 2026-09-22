@@ -4,7 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -86,7 +86,7 @@ def fetch_corpus(root: Path | str = DEFAULT_ROOT) -> dict:
         text = dest.read_text(encoding="utf-8")
         members[doc_id] = {"url": url, "sha256": hashlib.sha256(
             text.encode()).hexdigest(),
-            "fetched_at": datetime.now(timezone.utc).isoformat(),
+            "fetched_at": datetime.now(UTC).isoformat(),
             "bytes": dest.stat().st_size}
 
     manifest = {"license": LICENSE_NOTE, "citation": PDQ_CITATION,

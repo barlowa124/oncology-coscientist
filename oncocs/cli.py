@@ -7,16 +7,19 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 from sksurv.util import Surv
 
 from oncocs import checks, evidence
 from oncocs.config import DEFAULT_ROOT, load_cohort
 from oncocs.data.download import download_cohort, load_manifest
 from oncocs.data.harmonize import harmonize
-from oncocs.data.load import (load_cases_sequenced, load_clinical_patient,
-                              load_clinical_sample, load_expression,
-                              load_mutations)
+from oncocs.data.load import (
+    load_cases_sequenced,
+    load_clinical_patient,
+    load_clinical_sample,
+    load_expression,
+    load_mutations,
+)
 from oncocs.models.cox import cox_summary, cox_survival, fit_cox
 from oncocs.models.metrics import evaluate
 from oncocs.models.rsf import fit_rsf, rsf_risk, rsf_survival
@@ -39,7 +42,8 @@ def _harmonized(cfg, root):
 def cmd_download(args):
     cfg = load_cohort(args.cohort, args.data_dir)
     manifest = download_cohort(cfg, args.data_dir)
-    print(json.dumps({"cohort": cfg.cohort, "manifest_sha256": manifest["manifest_sha256"]}, indent=2))
+    print(json.dumps({"cohort": cfg.cohort,
+                      "manifest_sha256": manifest["manifest_sha256"]}, indent=2))
 
 
 def cmd_split(args):
@@ -49,7 +53,8 @@ def cmd_split(args):
     split = make_split(patients, cfg, seed=args.seed, test_fraction=args.test_fraction,
                        data_manifest_sha256=manifest["manifest_sha256"],
                        root=args.data_dir, force=args.force)
-    print(json.dumps({k: split[k] for k in ("cohort", "seed", "n_train", "n_test", "split_sha256")}, indent=2))
+    keys = ("cohort", "seed", "n_train", "n_test", "split_sha256")
+    print(json.dumps({k: split[k] for k in keys}, indent=2))
 
 
 def _run_pipeline(cfg, root, seed):
@@ -88,8 +93,9 @@ def _run_pipeline(cfg, root, seed):
         run_checks.append({"name": "covariates", "passed": False,
                            "detail": {"reason": "no covariates survived the missingness filter"},
                            "affects": "all"})
-        models = {f"{m}/{fs}": {"metrics": {"abstained": True,
-                                            "reason": "no covariates survived the missingness filter"}}
+        abstain = {"abstained": True,
+                   "reason": "no covariates survived the missingness filter"}
+        models = {f"{m}/{fs}": {"metrics": dict(abstain)}
                   for m in ("cox", "rsf") for fs in ("clinical", "clinical_expression")}
     for fs in (() if not kinds else ("clinical", "clinical_expression")):
         include_expr = fs == "clinical_expression"
@@ -127,7 +133,8 @@ def _run_pipeline(cfg, root, seed):
                 models[f"rsf/{fs}"]["gene_cols"] = meta["gene_cols"]
                 cox_out["gene_cols"] = meta["gene_cols"]
         except Exception as exc:
-            models[f"rsf/{fs}"] = {"metrics": {"abstained": True, "reason": f"fit/eval failed: {exc}"}}
+            models[f"rsf/{fs}"] = {"metrics": {"abstained": True,
+                                               "reason": f"fit/eval failed: {exc}"}}
             if include_expr:
                 models[f"rsf/{fs}"]["gene_cols"] = meta["gene_cols"]
                 cox_out["gene_cols"] = meta["gene_cols"]
@@ -238,13 +245,16 @@ def cmd_agent_run(args):
         backend = OllamaBackend(model=args.model)
     record = run_agent(args.cohort, results_path, backend, args.seed,
                        Path(args.data_dir))
-    print(f"Agent run written to {Path(record['results_path']).parent / 'agent' / record['agent_run_id'] / 'agent_run.json'}")
+    agent_dir = (Path(record["results_path"]).parent / "agent"
+                 / record["agent_run_id"])
+    print(f"Agent run written to {agent_dir / 'agent_run.json'}")
     print(f"  status: {record['status']}  attempts: {len(record['drafts'])}")
 
 
 def cmd_agent_replay(args):
-    from oncocs.agents.replay import replay_agent
     import json as _json
+
+    from oncocs.agents.replay import replay_agent
     status, msg = replay_agent(Path(args.agent_run))
     if status == "FROZEN":
         rec = _json.loads(Path(args.agent_run).read_text(encoding="utf-8"))
@@ -311,6 +321,7 @@ def cmd_rag_fetch(args):
 
 def cmd_serve(args):
     import uvicorn
+
     from oncocs.api.app import create_app
     uvicorn.run(create_app(Path(args.data_dir)), host=args.host, port=args.port)
 

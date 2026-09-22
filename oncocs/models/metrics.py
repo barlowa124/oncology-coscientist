@@ -28,7 +28,7 @@ def td_auc(y_train: Surv, y_test: Surv, risk: np.ndarray,
     if not times:
         return {}
     auc, mean_auc = cumulative_dynamic_auc(y_train, y_test, risk, np.array(times))
-    out = {f"auc_{int(t)}m": float(a) for t, a in zip(times, auc)}
+    out = {f"auc_{int(t)}m": float(a) for t, a in zip(times, auc, strict=True)}
     out["auc_mean"] = float(mean_auc)
     return out
 

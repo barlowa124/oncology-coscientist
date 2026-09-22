@@ -2,21 +2,24 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
+from sksurv.util import Surv
 
 from oncocs import checks, evidence
 from oncocs.cli import main
 from oncocs.config import load_cohort
 from oncocs.data.harmonize import harmonize
-from oncocs.data.load import (load_clinical_patient, load_clinical_sample,
-                              load_expression, load_mutations)
+from oncocs.data.load import (
+    load_clinical_patient,
+    load_clinical_sample,
+    load_expression,
+    load_mutations,
+)
 from oncocs.models.metrics import evaluate
 from oncocs.splits import load_split, make_split, split_sha256
-from sksurv.util import Surv
 
 SEED = 20240601
 
@@ -88,8 +91,8 @@ def test_missing_covariate_dropped_over_20pct(tmp_path):
 
 
 def test_reference_levels_and_mode_imputation(tmp_path):
-    from tests.conftest import _make_cohort_dir
     from oncocs.prep import prepare_features
+    from tests.conftest import _make_cohort_dir
     root = _make_cohort_dir(tmp_path)
     cfg = load_cohort("synth", root)
     cp = load_clinical_patient(cfg, root)

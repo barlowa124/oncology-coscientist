@@ -134,7 +134,7 @@ def verify_draft(draft: str, flat_values: dict[str, float],
     for m in _CITE_RE.finditer(draft):
         if m.group(0).strip("[]") not in passages:
             unknown_citations.append(m.group(0))
-    for rx, gi in ((_QUOTE_THEN_TAG, 0), (_TAG_THEN_QUOTE, 1)):
+    for rx, _gi in ((_QUOTE_THEN_TAG, 0), (_TAG_THEN_QUOTE, 1)):
         for m in rx.finditer(draft):
             quote, tag = m.group(1), m.group(2)
             if tag.strip("[]") in passages and quote not in passages[tag.strip("[]")]:
@@ -165,11 +165,12 @@ def verify_draft(draft: str, flat_values: dict[str, float],
                                    "context": "context section (not in cited passage)"})
             continue
 
-        def _matches(vs):
-            nonlocal_v = tok["value"] / 100.0 if tok["is_pct"] else None
+        def _matches(vs, v=v, tol=tol, is_pct=tok["is_pct"]):
+            frac = v / 100.0 if is_pct else None
+            # a percentage token is also a fraction; its tolerance scales down
             return any(abs(v - fv) <= tol for fv in vs) or (
-                nonlocal_v is not None and
-                any(abs(nonlocal_v - fv) <= tol for fv in vs))
+                frac is not None and
+                any(abs(frac - fv) <= tol / 100.0 for fv in vs))
 
         scope = _scope_of(tok["pos"]) if scopes else None
         if scope:

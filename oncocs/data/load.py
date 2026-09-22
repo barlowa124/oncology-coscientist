@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from oncocs.config import CohortConfig, DEFAULT_ROOT
+from oncocs.config import DEFAULT_ROOT, CohortConfig
 
 
 def _read_clinical(path: Path) -> pd.DataFrame:

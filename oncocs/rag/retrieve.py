@@ -1,7 +1,6 @@
 """BM25 retrieval over the PDQ corpus. No embeddings, no network."""
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 

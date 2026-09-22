@@ -41,12 +41,13 @@ def check_min_events(train_events: pd.Series, test_events: pd.Series) -> dict:
 def check_proportional_hazards(cph, train_df: pd.DataFrame) -> dict:
     from lifelines.statistics import proportional_hazard_test
     res = proportional_hazard_test(cph, train_df, time_transform="rank")
-    offenders = {idx: float(p) for idx, p in zip(res.summary.index, res.summary["p"]) if p < 0.01}
+    pvals = dict(zip(res.summary.index, res.summary["p"], strict=True))
+    offenders = {idx: float(p) for idx, p in pvals.items() if p < 0.01}
     return {
         "name": "proportional_hazards",
         "passed": not offenders,
         "detail": {"covariates_below_p_0.01": offenders,
-                   "p_values": {i: float(p) for i, p in zip(res.summary.index, res.summary["p"])}},
+                   "p_values": {i: float(p) for i, p in pvals.items()}},
         "affects": "cox_clinical",
     }
 

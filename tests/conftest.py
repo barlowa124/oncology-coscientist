@@ -21,13 +21,16 @@ def _make_cohort_dir(root: Path, n: int = 300, seed: int = 7) -> Path:
     age = rng.normal(65, 10, n).round(1)
     sex = rng.choice(["Male", "Female"], n)
     stage = rng.choice(["STAGE I", "STAGE II", "STAGE IIIA", "STAGE IV"], n)
-    stage_risk = np.array([{"STAGE I": 0.0, "STAGE II": 0.2, "STAGE IIIA": 0.4, "STAGE IV": 0.7}[s] for s in stage])
+    stage_risk = np.array(
+        [{"STAGE I": 0.0, "STAGE II": 0.2, "STAGE IIIA": 0.4,
+          "STAGE IV": 0.7}[s] for s in stage])
     marker = rng.binomial(1, 0.3, n)
 
     # Weibull survival: marker harmful, higher stage harmful, age mildly harmful
     linpred = 0.01 * (age - 65) + 0.5 * marker + stage_risk
     scale = 40.0
-    true_times = scale * (-np.log(rng.uniform(size=n)) / np.exp(linpred)) ** (1 / 1.2) * rng.lognormal(0, 0.6, n)
+    true_times = (scale * (-np.log(rng.uniform(size=n)) / np.exp(linpred))
+                  ** (1 / 1.2) * rng.lognormal(0, 0.6, n))
     censor = rng.uniform(8, 60, n)
     observed = np.minimum(true_times, censor)
     event = (true_times <= censor).astype(int)
@@ -38,7 +41,8 @@ def _make_cohort_dir(root: Path, n: int = 300, seed: int = 7) -> Path:
 
     # clinical patient file with # comment headers
     cp = pd.DataFrame({
-        "PATIENT_ID": pids, "OS_MONTHS": np.round(observed, 2), "OS_STATUS": np.where(event, "1:DECEASED", "0:LIVING"),
+        "PATIENT_ID": pids, "OS_MONTHS": np.round(observed, 2),
+        "OS_STATUS": np.where(event, "1:DECEASED", "0:LIVING"),
         "AGE": age, "SEX": sex, "AJCC_PATHOLOGIC_TUMOR_STAGE": stage,
     })
     hdr = "# synthetic\n# fixture\n# for tests\n# cols\n"
@@ -68,7 +72,8 @@ def _make_cohort_dir(root: Path, n: int = 300, seed: int = 7) -> Path:
                 "archive_sha256": "0" * 64, "members": {}}
     for f in raw.iterdir():
         manifest["members"][f.name] = hashlib.sha256(f.read_bytes()).hexdigest()
-    manifest["manifest_sha256"] = hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest()
+    canon = json.dumps(manifest, sort_keys=True).encode()
+    manifest["manifest_sha256"] = hashlib.sha256(canon).hexdigest()
     (root / "data" / "synth" / "manifest.json").write_text(json.dumps(manifest, indent=2))
 
     (root / "splits").mkdir(exist_ok=True)

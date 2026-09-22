@@ -7,12 +7,10 @@ from pathlib import Path
 import pytest
 
 from oncocs.agents.approve import approve
-from oncocs.agents.graph import run_agent, UNAPPROVED_BANNER
+from oncocs.agents.graph import UNAPPROVED_BANNER, run_agent
 from oncocs.agents.replay import replay_agent
-from oncocs.agents.graph import _parse_json
 from oncocs.agents.verifier import verify_draft
-from oncocs.llm.recorded import (RecordedBackend, ScriptedBackend,
-                                 TranscriptMismatch)
+from oncocs.llm.recorded import ScriptedBackend
 
 SEED = 20240601
 
@@ -51,7 +49,8 @@ def test_verifier_rejects_fabricated_number():
 
 def test_verifier_rejects_forbidden_and_missing():
     assert "outperforms" in verify_draft(GOOD + " outperforms baselines", FLAT, [])["forbidden"]
-    assert "## Cohort" in verify_draft(GOOD.replace("## Cohort", "## Data"), FLAT, [])["missing_sections"]
+    missing = verify_draft(GOOD.replace("## Cohort", "## Data"), FLAT, [])
+    assert "## Cohort" in missing["missing_sections"]
 
 
 def test_verifier_sections_case_insensitive():
@@ -93,8 +92,8 @@ def _agent_run(root, results_path, responses, seed=SEED):
 def _scripted_ok(results_path):
     r = json.loads(Path(results_path).read_text())
     from oncocs.agents.demo import demo_responses
-    from oncocs.splits import load_split
     from oncocs.config import load_cohort
+    from oncocs.splits import load_split
     split = load_split(load_cohort("synth", results_path.parents[3]), results_path.parents[3])
     return demo_responses(r, split)
 
@@ -372,3 +371,35 @@ def test_context_numbers_must_come_from_passage():
                      focus_models=FOCUS_ALL, passages=PASSAGES)
     assert not v["passed"]
     assert any("context section" in u["context"] for u in v["unverified_numbers"])
+
+
+# ---------- percentage tolerance ----------
+
+def test_percentage_fraction_tolerance():
+    # a percentage token also matches the corresponding fraction, with the
+    # tolerance scaled to the fraction domain (tol/100)
+    flat = {"n_patients": 501.0, "missingness.age.fraction": 0.02}
+    d = ("## Cohort\n501 patients. Missingness 2% overall.\n\n"
+         "## Models and metrics\nNo numeric metrics reported.\n\n"
+         "## Checks and abstentions\nAll checks passed.\n\n"
+         "## Limitations\nResearch only.")
+    assert verify_draft(d, flat, [])["passed"]
+    flat["missingness.age.fraction"] = 0.35
+    assert not verify_draft(d, flat, [])["passed"]
+    flat["missingness.age.fraction"] = 0.020
+    d2 = d.replace("2% overall", "2.0% overall")
+    assert verify_draft(d2, flat, [])["passed"]
+    flat["missingness.age.fraction"] = 0.025
+    assert not verify_draft(d2, flat, [])["passed"]
+
+
+# ---------- analysis plan focus-model filtering ----------
+
+def test_analysis_plan_drops_unknown_focus_models(synth_results):
+    plan = ('{"focus_models": ["cox/clinical", "bogus/model"], '
+            '"claims_to_make": [], "must_disclose": []}')
+    rec = _agent_run(synth_results.parents[3], synth_results,
+                     ["cohort text", plan, *_scripted_ok(synth_results)[2:]])
+    assert rec["analysis_plan"]["focus_models"] == ["cox/clinical"]
+    assert rec["analysis_plan_dropped_focus_models"] == ["bogus/model"]
+    assert not rec["verification"].get("missing_focus_models")

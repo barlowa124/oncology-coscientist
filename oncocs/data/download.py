@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import hashlib
-import io
 import json
 import tarfile
 import time
@@ -10,7 +9,7 @@ from pathlib import Path
 
 import requests
 
-from oncocs.config import CohortConfig, DEFAULT_ROOT
+from oncocs.config import DEFAULT_ROOT, CohortConfig
 
 
 def _sha256_file(path: Path) -> str:

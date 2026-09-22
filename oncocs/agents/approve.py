@@ -1,10 +1,9 @@
 """Human approval gate for agent reports."""
 from __future__ import annotations
 
-import hashlib
 import json
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from oncocs.agents.graph import UNAPPROVED_BANNER
@@ -30,7 +29,7 @@ def approve(agent_run_path: Path, by: str, note: str = "") -> Path:
     if agent_run_sha(record) != m.group(1):
         raise ValueError("agent_run.json changed since report was rendered; refusing approval")
 
-    approval = {"by": by, "timestamp": datetime.now(timezone.utc).isoformat(),
+    approval = {"by": by, "timestamp": datetime.now(UTC).isoformat(),
                 "agent_run_sha256": m.group(1)}
     if note:
         approval["note"] = note
@@ -65,7 +64,7 @@ def reject(agent_run_path: Path, by: str, reason: str) -> Path:
         raise ValueError("agent_run.json changed since report was rendered; refusing rejection")
 
     record["human_review"] = {"decision": "rejected", "by": by,
-                              "timestamp": datetime.now(timezone.utc).isoformat(),
+                              "timestamp": datetime.now(UTC).isoformat(),
                               "reason": reason,
                               "agent_run_sha256": m.group(1)}
     agent_run_path.write_text(json.dumps(record, indent=2, default=str) + "\n",

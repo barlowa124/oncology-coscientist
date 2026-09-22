@@ -5,9 +5,8 @@ import hashlib
 import json
 import platform
 import subprocess
-import sys
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from importlib.metadata import version as pkg_version
 from pathlib import Path
 
@@ -35,7 +34,7 @@ def build_record(cohort: str, seed: int, root: Path, data_manifest_sha256: str,
                  split_sha256: str, config_sha256: str) -> dict:
     return {
         "run_id": uuid.uuid4().hex[:12],
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "cohort": cohort,
         "git_commit": _git_commit(root),
         "git_dirty": _git_dirty(root),
