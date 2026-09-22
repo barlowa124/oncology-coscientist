@@ -308,6 +308,26 @@ def test_calibration_glossary_misuse_rejected():
     assert "C-index described as calibration" in v["forbidden"]
 
 
+def test_metric_label_integers_are_global():
+    # "6-36" from integrated_brier_6_36m is a window label, not a model value
+    flat = dict(SCOPE_FLAT)
+    for mk in SCOPE_MODELS:
+        flat[f"models.{mk}.metrics.integrated_brier_6_36m"] = 0.15
+    body = ("* cox/clinical: C 0.647\n* rsf/clinical: C 0.639\n"
+            "* cox/clinical_expression: C 0.643\n"
+            "* rsf/clinical_expression: C 0.632\n")
+    draft = ("## Cohort\n501 patients, scored over 6-36 months overall.\n\n"
+             "## Models and metrics\n" + body +
+             "\n\n## Checks and abstentions\nAll checks passed.\n\n"
+             "## Limitations\nResearch only.")
+    v = verify_draft(draft, flat, [], models=SCOPE_MODELS, focus_models=FOCUS_ALL)
+    assert v["passed"], v
+    # a genuine model-only value in unscoped text still fails
+    draft2 = draft.replace("6-36 months", "0.639 overall")
+    v2 = verify_draft(draft2, flat, [], models=SCOPE_MODELS, focus_models=FOCUS_ALL)
+    assert not v2["passed"] and v2["unscoped_model_numbers"]
+
+
 # ---------- RAG citation checks ----------
 
 PASSAGES = {"PDQ:doc1#0": "Surgery is often the main treatment, with about "

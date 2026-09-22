@@ -107,10 +107,13 @@ def verify_draft(draft: str, flat_values: dict[str, float],
     unverified, forbidden, missing = [], [], []
     misattributed, missing_focus, unscoped_model = [], [], []
 
-    has_time_keys = {
-        t for t in (12, 24, 36)
-        if any(k.endswith(f"_{t}m") or f"_{t}m" in k for k in flat_values)
-    }
+    # Integers embedded in metric key names are labels, not model values:
+    # integrated_brier_6_36m -> {6, 36}; auc_12m/24m/36m -> {12, 24, 36}.
+    label_ints = set()
+    for k in flat_values:
+        for seg in k.split("."):
+            if re.search(r"[a-zA-Z]", seg) and re.search(r"\d", seg):
+                label_ints.update(int(x) for x in re.findall(r"\d+", seg))
 
     # per-model value sets and global (non-model) values for scoped checks
     model_vals = {}
@@ -180,15 +183,15 @@ def verify_draft(draft: str, flat_values: dict[str, float],
                     continue
         else:
             ok = _matches(values)
-            if ok and models and not _matches(global_vals):
+            is_label = tok["decimals"] == 0 and int(v) in label_ints
+            if ok and models and not is_label and not _matches(global_vals):
                 owners = [k for k, vs in model_vals.items() if _matches(vs)]
                 if owners:
                     unscoped_model.append({"token": tok["token"],
                                            "found_in": owners,
                                            "context": tok["context"]})
                     continue
-        if not ok and tok["decimals"] == 0 and int(v) in (12, 24, 36) \
-                and int(v) in has_time_keys:
+        if not ok and tok["decimals"] == 0 and int(v) in label_ints:
             ok = True
         if not ok:
             unverified.append({"token": tok["token"], "context": tok["context"]})
