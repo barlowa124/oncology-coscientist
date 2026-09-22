@@ -8,6 +8,11 @@ computation — including which model each number belongs to — and a human
 approval gate signs off. Every LLM call is recorded and can be replayed
 byte-for-byte.
 
+Stack: LangGraph StateGraph agents; lifelines Cox PH and scikit-survival Random
+Survival Forest; BM25 retrieval over NCI PDQ; FastAPI review API; pluggable LLM
+backend (Ollama gemma3 by default, any LangChain chat model, recorded
+transcripts for replay).
+
 ```mermaid
 flowchart LR
     download --> split --> run --> results[results.json<br/>evidence record]
@@ -65,9 +70,11 @@ ranking while sex is already a covariate.
   `cox/clinical_expression` metrics (0.157, 0.711, 0.666) under `cox/clinical`.
 - **`agent/ce75cc3fd75a` (GBM, gemma3:4b):** rejected — all four models
   abstained but the draft never disclosed the abstention.
-- **`agent/4afbc74b7bc5` (BRCA, gemma3:12b):** rejected — wrote the IBS window
-  label "6-36 months" in unscoped text; `6` exists only under `models.*`, so the
-  scoped verifier flagged it as an unscoped model number.
+- **`agent/4afbc74b7bc5` (BRCA, gemma3:12b) — verifier false positive, fixed:**
+  rejected for writing the IBS window label "6-36 months" in unscoped text; the
+  `6` matched only `models.*` values. The verifier now derives integers embedded
+  in metric key names (e.g. `integrated_brier_6_36m`, `auc_24m`) and treats them
+  as labels; the follow-up run `052fa2c286da` passed in 3 attempts.
 
 ## Model comparison (gemma3:4b vs gemma3:12b, seed 20240601, temp 0)
 
@@ -77,7 +84,10 @@ ranking while sex is already a covariate.
 |---|---|---|
 | LUAD | passed in 1 attempt (later human-rejected for misattribution) | rejected after 3 (persistent misattribution) |
 | GBM | rejected after 3 (abstention not disclosed) | passed in 2 attempts |
-| BRCA | passed in 1 attempt | rejected after 3 (unscoped `6` in "6-36 months") |
+| BRCA | passed in 1 attempt | passed in 3 attempts † |
+
+† Earlier run `4afbc74b7bc5` was rejected on the "6-36" label false positive
+described above.
 
 More parameters did not monotonically help: 12b fixed the abstention
 disclosure on GBM but introduced or retained scoped-attribution errors on the

@@ -3,6 +3,37 @@
     {
       "cohort": "brca",
       "run_id": "24528d61379c",
+      "agent_run_id": "052fa2c286da",
+      "model_id": "gemma3:12b",
+      "status": "draft_pending_approval",
+      "attempts": 3,
+      "analysis_plan_fallback": false,
+      "findings_per_attempt": [
+        {
+          "attempt": 1,
+          "findings": {
+            "forbidden": 2
+          }
+        },
+        {
+          "attempt": 2,
+          "findings": {
+            "forbidden": 1
+          }
+        },
+        {
+          "attempt": 3,
+          "findings": {
+            "passed": 1
+          }
+        }
+      ],
+      "human_review": null,
+      "path": "results\\brca\\24528d61379c\\agent\\052fa2c286da\\agent_run.json"
+    },
+    {
+      "cohort": "brca",
+      "run_id": "24528d61379c",
       "agent_run_id": "4afbc74b7bc5",
       "model_id": "gemma3:12b",
       "status": "rejected",
