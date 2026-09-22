@@ -173,7 +173,7 @@ def cmd_verify(args):
         if actual != sha:
             print(f"FAIL: member {name} sha mismatch")
             ok = False
-    canon = json.dumps({k: manifest[k] for k in ("cohort", "archive_url", "archive_sha256", "members")},
+    canon = json.dumps({k: v for k, v in manifest.items() if k != "manifest_sha256"},
                        sort_keys=True).encode()
     import hashlib
     if hashlib.sha256(canon).hexdigest() != manifest["manifest_sha256"]:

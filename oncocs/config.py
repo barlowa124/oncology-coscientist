@@ -15,6 +15,7 @@ DEFAULT_ROOT = Path(__file__).resolve().parent.parent
 class CohortConfig:
     cohort: str
     archive_url: str
+    file_base_url: str
     files: dict
     columns: dict
     os_status_map: dict
@@ -23,6 +24,7 @@ class CohortConfig:
     sample_type_suffix: str
     n_expression_genes: int
     mutation_genes: list = field(default_factory=list)
+    entrez_ids: dict = field(default_factory=dict)
     config_sha256: str = ""
 
     @property
@@ -47,7 +49,8 @@ def load_cohort(name: str, root: Path | str = DEFAULT_ROOT) -> CohortConfig:
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     cfg = CohortConfig(
         cohort=raw["cohort"],
-        archive_url=raw["archive_url"],
+        archive_url=raw.get("archive_url", ""),
+        file_base_url=raw.get("file_base_url", ""),
         files=raw["files"],
         columns=raw["columns"],
         os_status_map=raw.get("os_status_map", {}),
@@ -56,6 +59,7 @@ def load_cohort(name: str, root: Path | str = DEFAULT_ROOT) -> CohortConfig:
         sample_type_suffix=raw.get("sample_type_suffix", "-01"),
         n_expression_genes=int(raw.get("n_expression_genes", 50)),
         mutation_genes=list(raw.get("mutation_genes", [])),
+        entrez_ids={k: int(v) for k, v in raw.get("entrez_ids", {}).items()},
     )
     cfg.config_sha256 = _sha256_of_obj(raw)
     return cfg

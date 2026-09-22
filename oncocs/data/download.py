@@ -5,6 +5,7 @@ import hashlib
 import io
 import json
 import tarfile
+import time
 from pathlib import Path
 
 import requests
@@ -30,39 +31,74 @@ def download_cohort(cfg: CohortConfig, root: Path | str = DEFAULT_ROOT) -> dict:
     raw_dir = root / "data" / cfg.cohort / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
 
-    archive_path = raw_dir / Path(cfg.archive_url).name
-    if not archive_path.exists():
-        print(f"Downloading {cfg.archive_url} ...")
-        resp = requests.get(cfg.archive_url, stream=True, timeout=120)
-        resp.raise_for_status()
-        with open(archive_path, "wb") as fh:
-            for chunk in resp.iter_content(1 << 20):
-                fh.write(chunk)
-
-    # Extract archive members into raw_dir
     used_names = [v for v in cfg.files.values()]
     member_sha = {}
-    with tarfile.open(archive_path, "r:gz") as tar:
-        names = {}
-        for member in tar.getmembers():
-            base = Path(member.name).name
-            if base in used_names:
-                fh = tar.extractfile(member)
-                data = fh.read()
-                (raw_dir / base).write_bytes(data)
-                member_sha[base] = _sha256_bytes(data)
-                names[base] = member.name
-        missing = [n for n in used_names if n not in names]
-        if missing:
+    archive_sha = None
+    source = "archive"
+    archive_path = raw_dir / Path(cfg.archive_url).name if cfg.archive_url else None
+
+    fetched = archive_path is not None and archive_path.exists()
+    if not fetched and cfg.archive_url:
+        print(f"Downloading {cfg.archive_url} ...")
+        try:
+            resp = requests.get(cfg.archive_url, stream=True, timeout=120)
+            resp.raise_for_status()
+            with open(archive_path, "wb") as fh:
+                for chunk in resp.iter_content(1 << 20):
+                    fh.write(chunk)
+            fetched = True
+        except requests.RequestException as exc:
+            print(f"Archive download failed ({exc}); falling back to per-file download.")
+
+    if fetched:
+        with tarfile.open(archive_path, "r:gz") as tar:
+            names = {}
+            for member in tar.getmembers():
+                base = Path(member.name).name
+                if base in used_names:
+                    fh = tar.extractfile(member)
+                    data = fh.read()
+                    (raw_dir / base).write_bytes(data)
+                    member_sha[base] = _sha256_bytes(data)
+                    names[base] = member.name
+            missing = [n for n in used_names if n not in names]
+            if missing:
+                raise FileNotFoundError(
+                    f"Expected members not found in archive: {missing}. "
+                    f"Archive contains e.g. {[m.name for m in tar.getmembers()][:20]}"
+                )
+        archive_sha = _sha256_file(archive_path)
+    else:
+        if not cfg.file_base_url:
             raise FileNotFoundError(
-                f"Expected members not found in archive: {missing}. "
-                f"Archive contains e.g. {[m.name for m in tar.getmembers()][:20]}"
+                "Archive unavailable and no file_base_url configured for per-file download."
             )
+        source = "files"
+        for key, name in cfg.files.items():
+            dest = raw_dir / name
+            if not dest.exists():
+                url = f"{cfg.file_base_url.rstrip('/')}/{name}"
+                print(f"Downloading {url} ...")
+                try:
+                    resp = requests.get(url, timeout=600)
+                    resp.raise_for_status()
+                    dest.write_bytes(resp.content)
+                except requests.RequestException as exc:
+                    if key == "mutations":
+                        print(f"  failed ({exc}); fetching mutations via cBioPortal API.")
+                        _fetch_mutations_api(cfg, dest)
+                    else:
+                        raise
+            member_sha[name] = _sha256_file(dest)
+        missing = [n for n in used_names if not (raw_dir / n).exists()]
+        if missing:
+            raise FileNotFoundError(f"Expected files not downloaded: {missing}")
 
     manifest = {
         "cohort": cfg.cohort,
         "archive_url": cfg.archive_url,
-        "archive_sha256": _sha256_file(archive_path),
+        "source": source,
+        "archive_sha256": archive_sha,
         "members": member_sha,
     }
     manifest["manifest_sha256"] = _sha256_bytes(
@@ -72,6 +108,39 @@ def download_cohort(cfg: CohortConfig, root: Path | str = DEFAULT_ROOT) -> dict:
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     print(f"Manifest written to {manifest_path}")
     return manifest
+
+
+CBIOPORTAL_API = "https://www.cbioportal.org/api"
+
+
+def _fetch_mutations_api(cfg: CohortConfig, dest: Path) -> None:
+    """Fetch mutations for the configured genes via the cBioPortal API and write
+    a minimal MAF-style TSV (Hugo_Symbol, Tumor_Sample_Barcode, Variant_Classification)."""
+    study = Path(cfg.archive_url).stem.removesuffix(".tar") if cfg.archive_url else ""
+    profile = f"{study}_mutations"
+    entrez = {g: cfg.entrez_ids[g] for g in cfg.mutation_genes if g in cfg.entrez_ids}
+    body = {"entrezGeneIds": list(entrez.values()), "sampleListId": f"{study}_all"}
+    for attempt in range(5):
+        try:
+            r = requests.post(
+                f"{CBIOPORTAL_API}/molecular-profiles/{profile}/mutations/fetch",
+                params={"projection": "DETAILED"},
+                json=body,
+                timeout=300,
+            )
+            r.raise_for_status()
+            break
+        except requests.RequestException:
+            if attempt == 4:
+                raise
+            time.sleep(10)
+    rows = r.json()
+    with open(dest, "w", encoding="utf-8") as fh:
+        fh.write("Hugo_Symbol\tTumor_Sample_Barcode\tVariant_Classification\n")
+        for m in rows:
+            fh.write(
+                f"{m['gene']['hugoGeneSymbol']}\t{m['sampleId']}\t{m.get('mutationType', '')}\n"
+            )
 
 
 def load_manifest(cfg: CohortConfig, root: Path | str = DEFAULT_ROOT) -> dict:

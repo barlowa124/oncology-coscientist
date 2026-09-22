@@ -1,5 +1,6 @@
 cohort: luad
 archive_url: https://cbioportal-datahub.s3.amazonaws.com/luad_tcga_pan_can_atlas_2018.tar.gz
+file_base_url: https://media.githubusercontent.com/media/cBioPortal/datahub/master/public/luad_tcga_pan_can_atlas_2018
 files:
   clinical_patient: data_clinical_patient.txt
   clinical_sample: data_clinical_sample.txt
@@ -38,3 +39,9 @@ mutation_genes:
   - EGFR
   - STK11
   - KEAP1
+entrez_ids:
+  TP53: 7157
+  KRAS: 3845
+  EGFR: 1956
+  STK11: 6794
+  KEAP1: 9817
