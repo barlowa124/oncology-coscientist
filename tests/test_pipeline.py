@@ -148,6 +148,11 @@ def test_excluded_genes_never_selected(synth_root):
                                meta["gene_cols"], meta["impute"], meta["scale"],
                                excluded_genes=["XIST"])
     assert res["passed"]
+    # regex patterns are honored too
+    _, _, meta2 = prepare_features(patients, expr, train, test,
+                                   report["covariates_used"], 50, True,
+                                   excluded_gene_patterns=["^XIST$"])
+    assert "XIST" not in meta2["gene_cols"]
 
 
 # ---------- checks ----------

@@ -54,7 +54,8 @@ def check_proportional_hazards(cph, train_df: pd.DataFrame) -> dict:
 def check_leakage(train_df: pd.DataFrame, expr_train: pd.DataFrame,
                   feature_cols: dict, n_genes: int,
                   used_gene_cols: list, used_impute: dict, used_scale: dict,
-                  excluded_genes: list | tuple = ()) -> dict:
+                  excluded_genes: list | tuple = (),
+                  excluded_gene_patterns: list | tuple = ()) -> dict:
     """Recompute train-only gene selection, imputation stats, and standardization; compare."""
     detail = {}
     ok = True
@@ -69,7 +70,9 @@ def check_leakage(train_df: pd.DataFrame, expr_train: pd.DataFrame,
         detail[f"impute_{col}_matches"] = bool(rec == used_impute.get(col))
         ok &= detail[f"impute_{col}_matches"]
     if expr_train is not None and n_genes:
-        avail = expr_train.drop(columns=[g for g in excluded_genes if g in expr_train.columns])
+        from oncocs.prep import excluded_gene_set
+        drop = excluded_gene_set(expr_train.columns, excluded_genes, excluded_gene_patterns)
+        avail = expr_train.drop(columns=drop)
         recomputed_genes = list(avail.var().sort_values(ascending=False).head(n_genes).index)
         detail["gene_selection_matches"] = recomputed_genes == used_gene_cols
         ok &= detail["gene_selection_matches"]

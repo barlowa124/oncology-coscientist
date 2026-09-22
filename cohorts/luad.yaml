@@ -65,3 +65,8 @@ excluded_genes:
   - TTTY15
   - TTTY14
   - KDM5C
+  - CYorf15A
+  - CYorf15B
+excluded_gene_patterns:
+  - "^CYorf"
+  - "^TTTY"

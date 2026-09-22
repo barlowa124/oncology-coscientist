@@ -88,7 +88,7 @@ def _run_pipeline(cfg, root, seed):
         X_tr, X_te, meta = prepare_features(
             patients, expr if include_expr else None, train_ids, test_ids,
             kinds, cfg.n_expression_genes if include_expr else 0, include_expr,
-            cfg.excluded_genes)
+            cfg.excluded_genes, cfg.excluded_gene_patterns)
 
         train_df = X_tr.assign(os_months=patients.loc[train_ids, "os_months"],
                                event=patients.loc[train_ids, "event"])
@@ -128,7 +128,7 @@ def _run_pipeline(cfg, root, seed):
             run_checks.append(checks.check_leakage(
                 patients.loc[train_ids], expr.loc[train_ids], kinds,
                 cfg.n_expression_genes, meta["gene_cols"], meta["impute"], meta["scale"],
-                cfg.excluded_genes))
+                cfg.excluded_genes, cfg.excluded_gene_patterns))
 
     if cox_clinical is not None:
         run_checks.append(checks.check_proportional_hazards(cox_clinical, cox_clinical_df))
