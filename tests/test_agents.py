@@ -267,3 +267,88 @@ def test_scoped_verifier_missing_focus_model():
                      focus_models=FOCUS_ALL)
     assert not v["passed"]
     assert v["missing_focus_models"] == ["rsf/clinical_expression"]
+
+
+def test_unscoped_model_number_rejected():
+    # 0.639 exists only under models.rsf/clinical; in unscoped text it must fail.
+    # (Numbers after the last model mention are scoped to it, so the unscoped
+    # mention goes in the Cohort section, before any model key appears.)
+    body = ("* cox/clinical: C 0.647\n* rsf/clinical: C 0.639\n"
+            "* cox/clinical_expression: C 0.643\n"
+            "* rsf/clinical_expression: C 0.632\n")
+    draft = ("## Cohort\n501 patients. Overall discrimination reached 0.639 overall.\n\n"
+             "## Models and metrics\n" + body +
+             "\n\n## Checks and abstentions\nAll checks passed.\n\n"
+             "## Limitations\nResearch only.")
+    v = verify_draft(draft, SCOPE_FLAT, [], models=SCOPE_MODELS,
+                     focus_models=FOCUS_ALL)
+    assert not v["passed"]
+    assert any(u["token"] == "0.639" for u in v["unscoped_model_numbers"])
+
+
+def test_model_number_inside_its_block_passes():
+    body = ("* cox/clinical: C 0.647\n* rsf/clinical: C 0.639\n"
+            "* cox/clinical_expression: C 0.643\n"
+            "* rsf/clinical_expression: C 0.632, compared with 0.639\n")
+    v = verify_draft(_scoped_draft(body), SCOPE_FLAT, [], models=SCOPE_MODELS,
+                     focus_models=FOCUS_ALL)
+    # 0.639 inside the rsf/clinical_expression block is misattributed (belongs to
+    # rsf/clinical), not unscoped -- the right finding fires either way
+    assert v["passed"] or v["misattributed"]
+
+
+def test_calibration_glossary_misuse_rejected():
+    body = ("* cox/clinical: C 0.647\n* rsf/clinical: C 0.639\n"
+            "* cox/clinical_expression: C 0.643\n"
+            "* rsf/clinical_expression: C 0.632\n\n"
+            "The harrell_c metric represents calibration of the predictions.\n")
+    v = verify_draft(_scoped_draft(body), SCOPE_FLAT, [], models=SCOPE_MODELS,
+                     focus_models=FOCUS_ALL)
+    assert not v["passed"]
+    assert "C-index described as calibration" in v["forbidden"]
+
+
+# ---------- RAG citation checks ----------
+
+PASSAGES = {"PDQ:doc1#0": "Surgery is often the main treatment, with about "
+                          "26 percent of patients alive at 5 years.",
+            "PDQ:doc1#1": "Radiation therapy uses high-energy rays."}
+
+
+def _ctx_draft(ctx: str) -> str:
+    return _scoped_draft(
+        "* cox/clinical: C 0.647\n* rsf/clinical: C 0.639\n"
+        "* cox/clinical_expression: C 0.643\n* rsf/clinical_expression: C 0.632\n"
+    ) + "\n\n## Context\n" + ctx
+
+
+def test_unknown_citation_rejected():
+    ctx = '"Surgery is often the main treatment." [PDQ:nope#9]'
+    v = verify_draft(_ctx_draft(ctx), SCOPE_FLAT, [], models=SCOPE_MODELS,
+                     focus_models=FOCUS_ALL, passages=PASSAGES)
+    assert not v["passed"] and v["unknown_citations"]
+
+
+def test_misquote_rejected():
+    ctx = ('"Surgery is never the main treatment, with about 26 percent alive." '
+           '[PDQ:doc1#0]')
+    v = verify_draft(_ctx_draft(ctx), SCOPE_FLAT, [], models=SCOPE_MODELS,
+                     focus_models=FOCUS_ALL, passages=PASSAGES)
+    assert not v["passed"] and v["misquotes"]
+
+
+def test_correct_quote_and_passage_numbers_pass():
+    ctx = ('"Surgery is often the main treatment, with about 26 percent of '
+           'patients alive at 5 years." [PDQ:doc1#0] The passage cites 26 and 5.')
+    v = verify_draft(_ctx_draft(ctx), SCOPE_FLAT, [], models=SCOPE_MODELS,
+                     focus_models=FOCUS_ALL, passages=PASSAGES)
+    assert v["passed"], v
+
+
+def test_context_numbers_must_come_from_passage():
+    ctx = ('"Surgery is often the main treatment." [PDQ:doc1#0] '
+           'Median survival was 48 months.')
+    v = verify_draft(_ctx_draft(ctx), SCOPE_FLAT, [], models=SCOPE_MODELS,
+                     focus_models=FOCUS_ALL, passages=PASSAGES)
+    assert not v["passed"]
+    assert any("context section" in u["context"] for u in v["unverified_numbers"])

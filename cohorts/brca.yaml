@@ -40,6 +40,10 @@ stage_map:
   "STAGE IV": IV
 sample_type_suffix: "-01"
 n_expression_genes: 50
+rag_query: "breast cancer treatment surgery radiation chemotherapy hormone therapy stage prognosis"
+rag_docs:
+  - doc_id: pdq_breast_treatment
+    url: https://www.cancer.gov/types/breast/patient/breast-treatment-pdq
 mutation_genes:
   - TP53
   - PIK3CA

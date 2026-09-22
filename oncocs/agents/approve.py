@@ -15,6 +15,8 @@ def approve(agent_run_path: Path, by: str, note: str = "") -> Path:
     record = json.loads(agent_run_path.read_text(encoding="utf-8"))
     if record.get("status") != "draft_pending_approval":
         raise ValueError(f"Cannot approve run with status {record.get('status')!r}")
+    if record.get("approval"):
+        raise ValueError("Run already approved")
     if record.get("human_review"):
         raise ValueError(f"Run already has a human decision: "
                          f"{record['human_review']['decision']!r}")

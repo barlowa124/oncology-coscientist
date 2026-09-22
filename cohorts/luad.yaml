@@ -35,6 +35,10 @@ stage_map:
   "STAGE IV": IV
 sample_type_suffix: "-01"
 n_expression_genes: 50
+rag_query: "non-small cell lung cancer treatment surgery chemotherapy radiation stage prognosis"
+rag_docs:
+  - doc_id: pdq_nsclc_treatment
+    url: https://www.cancer.gov/types/lung/patient/non-small-cell-lung-treatment-pdq
 mutation_genes:
   - TP53
   - KRAS

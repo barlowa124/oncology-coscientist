@@ -28,6 +28,8 @@ class CohortConfig:
     entrez_ids: dict = field(default_factory=dict)
     excluded_genes: list = field(default_factory=list)
     excluded_gene_patterns: list = field(default_factory=list)
+    rag_query: str = ""
+    rag_docs: list = field(default_factory=list)
     config_sha256: str = ""
 
     @property
@@ -66,6 +68,8 @@ def load_cohort(name: str, root: Path | str = DEFAULT_ROOT) -> CohortConfig:
         entrez_ids={k: int(v) for k, v in raw.get("entrez_ids", {}).items()},
         excluded_genes=list(raw.get("excluded_genes", [])),
         excluded_gene_patterns=list(raw.get("excluded_gene_patterns", [])),
+        rag_query=raw.get("rag_query", ""),
+        rag_docs=list(raw.get("rag_docs", [])),
     )
     cfg.config_sha256 = _sha256_of_obj(raw)
     return cfg

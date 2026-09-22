@@ -27,6 +27,7 @@ class AgentState(TypedDict, total=False):
     flat_values: dict
     table_text: str
     cohort_summary: str
+    passages: dict
     analysis_plan: dict
     analysis_plan_fallback: bool
     draft: str
@@ -119,6 +120,14 @@ def build_graph(backend, seed: int | None = None):
             backend,
             "You are a careful scientific writer. Use only provided numbers.", user, seed)}
 
+    def context_agent(state: AgentState) -> dict:
+        """Deterministic: BM25-retrieve top-5 PDQ passages for the cohort."""
+        from oncocs.config import load_cohort
+        from oncocs.rag.retrieve import retrieve
+        cfg = load_cohort(state["cohort"], state["root"])
+        passages = retrieve(cfg.rag_query, state["root"]) if cfg.rag_query else {}
+        return {"passages": passages}
+
     def analysis_agent(state: AgentState) -> dict:
         r = state["results"]
         menu = {"models": list(r["models"].keys()),
@@ -183,7 +192,16 @@ def build_graph(backend, seed: int | None = None):
             "'state-of-the-art', 'robust', and 'significant' without an adjacent "
             "verifiable p-value. Do not name models, versions, or patient identifiers. "
             "Describe each check by its recorded outcome and detail; do not infer "
-            "assumption validity from confidence intervals."
+            "assumption validity from confidence intervals. "
+            "Metric glossary: harrell_c and uno_c are concordance indices measuring "
+            "discrimination (rank agreement between predicted risk and observed "
+            "survival); auc_12m/24m/36m are time-dependent AUCs measuring "
+            "discrimination at that horizon; integrated_brier_6_36m is the overall "
+            "accuracy of predicted survival probabilities (lower is better); "
+            "calibration_24m is the agreement between predicted and observed "
+            "survival at 24 months. Do not call a concordance index a calibration "
+            "metric. When citing a model-specific number, name the model key "
+            "it belongs to in the same sentence or bullet."
         )
         user = (
             "Results table (numbers at display precision; cite these only):\n"
@@ -194,12 +212,26 @@ def build_graph(backend, seed: int | None = None):
             "## Cohort\n## Models and metrics\n## Checks and abstentions\n## Limitations\n"
             "The headers must appear verbatim as shown above (## + exact title)."
         )
+        if state.get("passages"):
+            listed = "\n".join(f"[{tag}] \"{text}\""
+                               for tag, text in state["passages"].items())
+            user += (
+                "\n\nRetrieved public-domain passages you may cite:\n" + listed +
+                "\n\nOptionally append a '## Context' section after Limitations. "
+                "In it, any sentence quoting a passage must end with its citation "
+                "tag, e.g. \"...quoted text...\" [PDQ:doc#0]. Quote verbatim only; "
+                "never cite a tag not listed above; numbers in Context must come "
+                "from the cited passage, not the results table.")
         extra = None
         if state.get("verification") and not state["verification"].get("passed", True):
             v = state["verification"]
             findings = []
             for u in v.get("unverified_numbers", []):
                 findings.append(f"  - {u['token']} (context: {u['context']})")
+            for u in v.get("unscoped_model_numbers", []):
+                findings.append(f"  - The number {u['token']} only exists under "
+                                f"model results ({', '.join(u['found_in'])}); cite it "
+                                "inside a block that names that model.")
             for ma in v.get("misattributed", []):
                 findings.append(f"  - The number {ma['token']} appears under "
                                 f"{ma['attributed_to']} but belongs to "
@@ -207,6 +239,11 @@ def build_graph(backend, seed: int | None = None):
             for fm in v.get("missing_focus_models", []):
                 findings.append(f"  - model {fm} was in the analysis plan but is "
                                 "never discussed")
+            for f in v.get("unknown_citations", []):
+                findings.append(f"  - citation tag {f} was not among the retrieved passages")
+            for f in v.get("misquotes", []):
+                findings.append(f"  - quoted text does not match passage {f['tag']}: "
+                                f"{f['quote'][:60]!r}")
             for f in v.get("forbidden", []):
                 findings.append(f"  - forbidden phrasing: {f}")
             for s in v.get("missing_sections", []):
@@ -224,7 +261,8 @@ def build_graph(backend, seed: int | None = None):
         v = verify_draft(state["draft"], state["flat_values"], state["results"]["checks"],
                          models=state["results"].get("models"),
                          focus_models=(state.get("analysis_plan") or {})
-                         .get("focus_models"))
+                         .get("focus_models"),
+                         passages=state.get("passages") or {})
         drafts = list(state.get("drafts", []))
         drafts.append({"attempt": state["attempts"], "draft": state["draft"],
                        "verification": v})
@@ -245,13 +283,15 @@ def build_graph(backend, seed: int | None = None):
 
     g = StateGraph(AgentState)
     g.add_node("cohort_agent", cohort_agent)
+    g.add_node("context_agent", context_agent)
     g.add_node("analysis_agent", analysis_agent)
     g.add_node("modeling_node", modeling_node)
     g.add_node("report_agent", report_agent)
     g.add_node("claim_verifier", claim_verifier)
     g.add_node("human_gate", human_gate)
     g.set_entry_point("cohort_agent")
-    g.add_edge("cohort_agent", "analysis_agent")
+    g.add_edge("cohort_agent", "context_agent")
+    g.add_edge("context_agent", "analysis_agent")
     g.add_edge("analysis_agent", "modeling_node")
     g.add_conditional_edges(
         "modeling_node",
@@ -278,6 +318,17 @@ def render_report_md(draft: str, agent_run_sha256: str | None = None,
             findings = []
             findings += [f"unverified number {u['token']!r} ({u['context']})"
                          for u in v.get("unverified_numbers", [])]
+            findings += [f"unscoped model number {u['token']!r} "
+                         f"(belongs to {', '.join(u['found_in'])})"
+                         for u in v.get("unscoped_model_numbers", [])]
+            findings += [f"number {ma['token']!r} attributed to "
+                         f"{ma['attributed_to']} but belongs to "
+                         f"{', '.join(ma['actually_in'])}"
+                         for ma in v.get("misattributed", [])]
+            findings += [f"focus model {fm} never discussed"
+                         for fm in v.get("missing_focus_models", [])]
+            findings += [f"unknown citation {t}" for t in v.get("unknown_citations", [])]
+            findings += [f"misquote of {mq['tag']}" for mq in v.get("misquotes", [])]
             findings += [f"forbidden phrasing: {f}" for f in v.get("forbidden", [])]
             findings += [f"missing section: {s}" for s in v.get("missing_sections", [])]
             if v.get("abstention_missing"):

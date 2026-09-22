@@ -16,6 +16,12 @@ FORBIDDEN_PHRASES = [
     "state-of-the-art",
 ]
 
+FORBIDDEN_REGEXES = [
+    # a concordance/discrimination index must not be described as calibration
+    (re.compile(r"(harrell|uno|c-index|concordance)[^.]{0,60}calibrat", re.I),
+     "C-index described as calibration"),
+]
+
 _NUM_RE = re.compile(r"(?<![\w.%])\d[\d,]*(?:\.\d+)?\s*%?(?![\w.%])")
 _SIG_RE = re.compile(r"\bsignificant\b", re.IGNORECASE)
 _PNUM_RE = re.compile(r"p\s*[=<≤]\s*(0?\.\d+|1\.0+|<\s*0?\.\d+)", re.IGNORECASE)
@@ -52,10 +58,24 @@ def extract_numbers(text: str) -> list[dict]:
     return tokens
 
 
+def _section_span(draft: str, name: str) -> tuple[int, int] | None:
+    m = re.search(r"^##\s*" + re.escape(name) + r"\s*$", draft, re.I | re.M)
+    if not m:
+        return None
+    nxt = re.search(r"^##\s", draft[m.end():], re.M)
+    end = m.end() + nxt.start() if nxt else len(draft)
+    return m.start(), end
+
+
 def _checks_section(draft: str) -> str:
     m = re.search(r"##\s*Checks and abstentions\s*\n(.*?)(?=\n\s*##|\Z)",
                   draft, re.S | re.I)
     return m.group(1) if m else ""
+
+
+_CITE_RE = re.compile(r"\[PDQ:([A-Za-z0-9_.\-]+)#(\d+)\]")
+_QUOTE_THEN_TAG = re.compile(r'"([^"]{10,})"\s*(\[PDQ:[^\]]+\])')
+_TAG_THEN_QUOTE = re.compile(r'(\[PDQ:[^\]]+\])\s*"([^"]{10,})"')
 
 
 def _has_section(draft: str, title: str) -> bool:
@@ -81,10 +101,11 @@ def _model_scopes(draft: str, model_keys: list) -> list:
 
 def verify_draft(draft: str, flat_values: dict[str, float],
                  checks: list[dict], models: dict | None = None,
-                 focus_models: list | None = None) -> dict:
+                 focus_models: list | None = None,
+                 passages: dict | None = None) -> dict:
     values = list(flat_values.values())
     unverified, forbidden, missing = [], [], []
-    misattributed, missing_focus = [], []
+    misattributed, missing_focus, unscoped_model = [], [], []
 
     has_time_keys = {
         t for t in (12, 24, 36)
@@ -102,6 +123,26 @@ def verify_draft(draft: str, flat_values: dict[str, float],
                                   for mk in models)]
     scopes = _model_scopes(draft, list(models)) if models else []
 
+    # --- citation / context-section checks (PDQ passages) ---
+    passages = passages or {}
+    unknown_citations, misquotes = [], []
+    ctx_span = _section_span(draft, "Context")
+    for m in _CITE_RE.finditer(draft):
+        if m.group(0).strip("[]") not in passages:
+            unknown_citations.append(m.group(0))
+    for rx, gi in ((_QUOTE_THEN_TAG, 0), (_TAG_THEN_QUOTE, 1)):
+        for m in rx.finditer(draft):
+            quote, tag = m.group(1), m.group(2)
+            if tag.strip("[]") in passages and quote not in passages[tag.strip("[]")]:
+                misquotes.append({"tag": tag, "quote": quote})
+    tag_spans = [(m.start(), m.end()) for m in _CITE_RE.finditer(draft)]
+    ctx_text = draft[ctx_span[0]:ctx_span[1]] if ctx_span else ""
+    ctx_passage_text = ""
+    if ctx_span:
+        cited_in_ctx = {m.group(0).strip("[]") for m in _CITE_RE.finditer(ctx_text)}
+        ctx_passage_text = " ".join(
+            passages[t] for t in cited_in_ctx if t in passages).replace(",", "")
+
     def _scope_of(pos: int) -> str | None:
         owner = None
         for start, end, key in scopes:
@@ -111,6 +152,14 @@ def verify_draft(draft: str, flat_values: dict[str, float],
 
     for tok in extract_numbers(draft):
         v, tol = tok["value"], 0.5 * 10 ** (-tok["decimals"])
+        if any(s <= tok["pos"] < e for s, e in tag_spans):
+            continue  # digits inside citation tags are not claims
+        if ctx_span and ctx_span[0] <= tok["pos"] < ctx_span[1]:
+            # numbers in Context must come from the cited passages, not results
+            if tok["token"].rstrip("%").replace(",", "") not in ctx_passage_text:
+                unverified.append({"token": tok["token"],
+                                   "context": "context section (not in cited passage)"})
+            continue
 
         def _matches(vs):
             nonlocal_v = tok["value"] / 100.0 if tok["is_pct"] else None
@@ -131,6 +180,13 @@ def verify_draft(draft: str, flat_values: dict[str, float],
                     continue
         else:
             ok = _matches(values)
+            if ok and models and not _matches(global_vals):
+                owners = [k for k, vs in model_vals.items() if _matches(vs)]
+                if owners:
+                    unscoped_model.append({"token": tok["token"],
+                                           "found_in": owners,
+                                           "context": tok["context"]})
+                    continue
         if not ok and tok["decimals"] == 0 and int(v) in (12, 24, 36) \
                 and int(v) in has_time_keys:
             ok = True
@@ -148,6 +204,9 @@ def verify_draft(draft: str, flat_values: dict[str, float],
             forbidden.append(phrase)
     if re.search(r"\brobust\b", low):
         forbidden.append("robust")
+    for rx, label in FORBIDDEN_REGEXES:
+        if rx.search(draft):
+            forbidden.append(label)
 
     for m in _SIG_RE.finditer(draft):
         window = draft[m.end(): m.end() + 40]
@@ -172,8 +231,12 @@ def verify_draft(draft: str, flat_values: dict[str, float],
     return {
         "passed": (not unverified and not forbidden and not missing
                    and not abstention_missing and not misattributed
-                   and not missing_focus),
+                   and not missing_focus and not unscoped_model
+                   and not unknown_citations and not misquotes),
         "unverified_numbers": unverified,
+        "unknown_citations": unknown_citations,
+        "misquotes": misquotes,
+        "unscoped_model_numbers": unscoped_model,
         "misattributed": misattributed,
         "missing_focus_models": missing_focus,
         "forbidden": forbidden,

@@ -26,6 +26,10 @@ covariates:
   stage: null
 sample_type_suffix: "-01"
 n_expression_genes: 50
+rag_query: "glioblastoma adult brain tumor treatment temozolomide radiation prognosis"
+rag_docs:
+  - doc_id: pdq_adult_brain_treatment
+    url: https://www.cancer.gov/types/brain/patient/adult-brain-treatment-pdq
 mutation_genes:
   - TP53
   - PTEN

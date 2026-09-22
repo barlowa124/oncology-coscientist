@@ -260,6 +260,49 @@ def cmd_approve(args):
     return 0
 
 
+def cmd_agent_summarize(args):
+    """Scan all agent/*/agent_run.json; write results/agent_model_comparison.json."""
+    root = Path(args.data_dir)
+    entries = []
+    for p in sorted(root.glob("results/*/*/agent/*/agent_run.json")):
+        rec = json.loads(p.read_text(encoding="utf-8"))
+        findings = []
+        for d in rec.get("drafts", []):
+            counts = {}
+            for k, val in d.get("verification", {}).items():
+                if isinstance(val, list) and val:
+                    counts[k] = len(val)
+                elif isinstance(val, bool) and val:
+                    counts[k] = 1
+            findings.append({"attempt": d.get("attempt"), "findings": counts})
+        entries.append({
+            "cohort": rec.get("cohort"), "run_id": p.parents[2].name,
+            "agent_run_id": rec.get("agent_run_id"),
+            "model_id": rec.get("model_id"), "status": rec.get("status"),
+            "attempts": len(rec.get("drafts", [])),
+            "analysis_plan_fallback": rec.get("analysis_plan_fallback"),
+            "findings_per_attempt": findings,
+            "human_review": rec.get("human_review"),
+            "path": str(p.relative_to(root)),
+        })
+    out = root / "results" / "agent_model_comparison.json"
+    out.write_text(json.dumps({"runs": entries}, indent=2) + "\n", encoding="utf-8")
+    print(f"Wrote {out} ({len(entries)} agent runs)")
+
+
+def cmd_rag_fetch(args):
+    from oncocs.rag.fetch import fetch_corpus
+    m = fetch_corpus(args.data_dir)
+    print(json.dumps({"documents": sorted(m["members"]),
+                      "bytes": sum(v["bytes"] for v in m["members"].values())}, indent=2))
+
+
+def cmd_serve(args):
+    import uvicorn
+    from oncocs.api.app import create_app
+    uvicorn.run(create_app(Path(args.data_dir)), host=args.host, port=args.port)
+
+
 def cmd_reject(args):
     from oncocs.agents.approve import reject
     try:
@@ -309,6 +352,18 @@ def main(argv=None):
     rp = ags.add_parser("replay")
     rp.add_argument("agent_run")
     rp.set_defaults(fn=cmd_agent_replay)
+    sm = ags.add_parser("summarize")
+    sm.set_defaults(fn=cmd_agent_summarize)
+
+    rg = sub.add_parser("rag")
+    rgs = rg.add_subparsers(dest="rag_command", required=True)
+    rf = rgs.add_parser("fetch")
+    rf.set_defaults(fn=cmd_rag_fetch)
+
+    sv = sub.add_parser("serve")
+    sv.add_argument("--host", default="127.0.0.1")
+    sv.add_argument("--port", type=int, default=8000)
+    sv.set_defaults(fn=cmd_serve)
 
     ap = sub.add_parser("approve")
     ap.add_argument("agent_run")
