@@ -298,7 +298,9 @@ def cmd_qc(args):
     except Exception as exc:
         qc["split_integrity"] = {"passed": None, "detail": {"error": str(exc)}}
 
-    runs = sorted((root / "results" / cfg.cohort).glob("*"), key=lambda p: p.stat().st_mtime)
+    runs = [d for d in (root / "results" / cfg.cohort).glob("*")
+            if (d / "results.json").exists()]
+    runs.sort(key=lambda d: (d / "results.json").stat().st_mtime)
     out = (runs[-1] if runs else root / "results" / cfg.cohort / "qc") / "qc.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(qc, indent=2, default=str) + "\n", encoding="utf-8")

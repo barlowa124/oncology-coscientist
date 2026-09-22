@@ -82,6 +82,10 @@ flowchart LR
 - BRCA adds `STAGE IIIC` / `STAGE X` source values; `STAGE X` ("stage cannot be
   assessed") stays unmapped and is counted as missing (19 patients, 1.8%).
 
+Results were regenerated at f61a25f after the config-hash scope fix; metrics
+are byte-identical to the earlier run dirs, which are preserved with their
+agent runs.
+
 LUAD in detail (all checks passed; references: stage I, sex Female):
 
 | Model / features | Harrell C | Uno C | AUC 12m | AUC 24m | AUC 36m | IBS 6–36m |
@@ -218,7 +222,7 @@ already-downloaded raw data and writes `results/<cohort>/<run>/qc.json`:
 
 ```
 $ python -m oncocs qc --cohort luad        # abridged
-QC luad: wrote results/luad/3097990b11d8/qc.json
+QC luad: wrote results/luad/549df572c5ab/qc.json
   schema clinical_patient: OK
   schema clinical_sample: OK
   schema mutations: OK
