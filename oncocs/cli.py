@@ -84,7 +84,14 @@ def _run_pipeline(cfg, root, seed):
 
     models = {}
     cox_clinical = None
-    for fs in ("clinical", "clinical_expression"):
+    if not kinds:
+        run_checks.append({"name": "covariates", "passed": False,
+                           "detail": {"reason": "no covariates survived the missingness filter"},
+                           "affects": "all"})
+        models = {f"{m}/{fs}": {"metrics": {"abstained": True,
+                                            "reason": "no covariates survived the missingness filter"}}
+                  for m in ("cox", "rsf") for fs in ("clinical", "clinical_expression")}
+    for fs in (() if not kinds else ("clinical", "clinical_expression")):
         include_expr = fs == "clinical_expression"
         X_tr, X_te, meta = prepare_features(
             patients, expr if include_expr else None, train_ids, test_ids,
