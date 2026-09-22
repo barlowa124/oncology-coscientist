@@ -31,11 +31,20 @@ def replay_agent(agent_run_path: Path) -> tuple[bool, str]:
     report_path = agent_run_path.parent / "report.md"
     original_md = report_path.read_text(encoding="utf-8")
 
-    # report.md embeds the pre-approval agent_run sha + optional approval banner;
-    # compare the draft body and the verification outcome.
-    orig_body = original_md.split("\n\n", 1)[-1] if "\n\n" in original_md else original_md
-    replay_body = final.get("draft", "") + "\n"
-    body_ok = orig_body.strip() == replay_body.strip()
+    import re
+    m = re.search(r"<!-- agent_run_sha256: ([0-9a-f]+) -->", original_md)
+    if record.get("status") in ("rejected", "abstained"):
+        expected = render_report_md(final.get("draft", ""),
+                                    agent_run_sha256=m.group(1) if m else None,
+                                    status=record["status"],
+                                    drafts=record.get("drafts", []))
+        body_ok = original_md == expected
+    else:
+        # report.md embeds the pre-approval agent_run sha + optional approval banner;
+        # compare the draft body and the verification outcome.
+        orig_body = original_md.split("\n\n", 1)[-1] if "\n\n" in original_md else original_md
+        replay_body = final.get("draft", "") + "\n"
+        body_ok = orig_body.strip() == replay_body.strip()
     ver_ok = final.get("verification") == record.get("verification")
     status_ok = final.get("status") == record.get("status")
     if body_ok and ver_ok and status_ok:
