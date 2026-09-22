@@ -112,8 +112,9 @@ def verify_draft(draft: str, flat_values: dict[str, float],
     label_ints = set()
     for k in flat_values:
         for seg in k.split("."):
-            if re.search(r"[a-zA-Z]", seg) and re.search(r"\d", seg):
-                label_ints.update(int(x) for x in re.findall(r"\d+", seg))
+            m = re.search(r"_(\d+)(?:_(\d+))?m$", seg)
+            if m:
+                label_ints.update(int(x) for x in m.groups() if x)
 
     # per-model value sets and global (non-model) values for scoped checks
     model_vals = {}
