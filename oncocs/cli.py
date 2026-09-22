@@ -216,6 +216,42 @@ def cmd_verify(args):
     return 1
 
 
+def cmd_agent_run(args):
+    from oncocs.agents.graph import run_agent
+    cfg = load_cohort(args.cohort, args.data_dir)
+    results_path = Path(args.results)
+    if args.backend == "scripted-demo":
+        from oncocs.agents.demo import demo_backend
+        from oncocs.splits import load_split
+        backend = demo_backend(json.loads(results_path.read_text()),
+                               load_split(cfg, args.data_dir))
+    else:
+        from oncocs.llm.ollama import OllamaBackend
+        backend = OllamaBackend(model=args.model)
+    record = run_agent(args.cohort, results_path, backend, args.seed,
+                       Path(args.data_dir))
+    print(f"Agent run written to {Path(record['results_path']).parent / 'agent_run.json'}")
+    print(f"  status: {record['status']}  attempts: {len(record['drafts'])}")
+
+
+def cmd_agent_replay(args):
+    from oncocs.agents.replay import replay_agent
+    ok, msg = replay_agent(Path(args.agent_run))
+    print(("PASS" if ok else "FAIL") + f": {msg}")
+    return 0 if ok else 1
+
+
+def cmd_approve(args):
+    from oncocs.agents.approve import approve
+    try:
+        path = approve(Path(args.agent_run), by=args.by, note=args.note or "")
+    except ValueError as exc:
+        print(f"FAIL: {exc}", file=sys.stderr)
+        return 1
+    print(f"Approved. Report updated: {path}")
+    return 0
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="oncocs")
     p.add_argument("--data-dir", default=str(DEFAULT_ROOT),
@@ -241,6 +277,25 @@ def main(argv=None):
     v = sub.add_parser("verify")
     v.add_argument("results")
     v.set_defaults(fn=cmd_verify)
+
+    ag = sub.add_parser("agent")
+    ags = ag.add_subparsers(dest="agent_command", required=True)
+    ar = ags.add_parser("run")
+    ar.add_argument("--cohort", required=True)
+    ar.add_argument("--results", required=True)
+    ar.add_argument("--backend", choices=["ollama", "scripted-demo"], default="ollama")
+    ar.add_argument("--model", default="gemma3:4b")
+    ar.add_argument("--seed", type=int, default=None)
+    ar.set_defaults(fn=cmd_agent_run)
+    rp = ags.add_parser("replay")
+    rp.add_argument("agent_run")
+    rp.set_defaults(fn=cmd_agent_replay)
+
+    ap = sub.add_parser("approve")
+    ap.add_argument("agent_run")
+    ap.add_argument("--by", required=True)
+    ap.add_argument("--note", default="")
+    ap.set_defaults(fn=cmd_approve)
 
     args = p.parse_args(argv)
     args.data_dir = Path(args.data_dir)

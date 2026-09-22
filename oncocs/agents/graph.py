@@ -1,0 +1,288 @@
+"""LangGraph agent pipeline: LLM drafting nodes + deterministic verify/gate nodes."""
+from __future__ import annotations
+
+import hashlib
+import json
+from pathlib import Path
+from typing import TypedDict
+
+from langgraph.graph import END, StateGraph
+
+from oncocs import evidence
+from oncocs.agents.verifier import flatten_results, verify_draft
+from oncocs.data.download import load_manifest
+from oncocs.splits import load_split, split_sha256
+
+MAX_ATTEMPTS = 3
+
+
+class AgentState(TypedDict, total=False):
+    cohort: str
+    results_path: str
+    root: str
+    results: dict
+    split: dict
+    flat_values: dict
+    table_text: str
+    cohort_summary: str
+    analysis_plan: dict
+    analysis_plan_fallback: bool
+    draft: str
+    drafts: list
+    verification: dict
+    attempts: int
+    status: str
+
+
+def _chat(backend, system: str, user: str, seed: int | None,
+          extra_user: str | None = None) -> str:
+    messages = [{"role": "system", "content": system},
+                {"role": "user", "content": user}]
+    if extra_user is not None:
+        messages.append({"role": "user", "content": extra_user})
+    return backend.complete(messages, temperature=0.0, seed=seed)
+
+
+def render_table(results: dict, split: dict) -> str:
+    """Display-precision rendering of everything the LLM may cite."""
+    lines = []
+    lines.append(f"cohort: {results['cohort']}")
+    lines.append(f"seed: {results['seed']}")
+    lines.append(f"n_train: {split['n_train']}")
+    lines.append(f"n_test: {split['n_test']}")
+    for k in ("n_patients", "n_patients_with_expression", "n_unsequenced_patients"):
+        if results.get(k) is not None:
+            lines.append(f"{k}: {results[k]}")
+    lines.append("dropped: " + json.dumps(results["dropped"]))
+    lines.append("missingness: " + json.dumps(results["missingness"]))
+    lines.append("checks:")
+    for c in results["checks"]:
+        lines.append(f"  {c['name']}: {'PASS' if c['passed'] else 'FAIL'} {json.dumps(c['detail'])}")
+    for name, out in results["models"].items():
+        m = out["metrics"]
+        if m.get("abstained"):
+            lines.append(f"{name}: ABSTAINED ({m['reason']})")
+            continue
+        lines.append(f"{name}: harrell_c={m['harrell_c']:.3f} uno_c={m['uno_c']:.3f} "
+                     f"auc_12m={m['auc_12m']:.3f} auc_24m={m['auc_24m']:.3f} "
+                     f"auc_36m={m['auc_36m']:.3f} integrated_brier_6_36m={m['integrated_brier_6_36m']:.3f}")
+        for h in out.get("hazard_ratios", []):
+            lines.append(f"  {name} HR {h['covariate']}: {h['hazard_ratio']:.2f} "
+                         f"[{h['hr_ci_lower']:.2f}, {h['hr_ci_upper']:.2f}] p={h['p']:.4f}")
+        if out.get("reference_levels"):
+            lines.append(f"  {name} reference_levels: {json.dumps(out['reference_levels'])}")
+    return "\n".join(lines)
+
+
+def build_graph(backend, seed: int | None = None):
+    def cohort_agent(state: AgentState) -> dict:
+        r = state["results"]
+        user = (
+            f"Cohort: {r['cohort']}\n"
+            f"missingness: {json.dumps(r['missingness'])}\n"
+            f"dropped: {json.dumps(r['dropped'])}\n"
+            f"n_train: {state['split']['n_train']}, n_test: {state['split']['n_test']}\n"
+            f"patients: {r.get('n_patients')}, with_expression: {r.get('n_patients_with_expression')}, "
+            f"unsequenced: {r.get('n_unsequenced_patients')}\n"
+            f"checks: {json.dumps([(c['name'], c['passed']) for c in r['checks']])}\n\n"
+            "Write a 1-2 paragraph description of this cohort, then a bulleted list of "
+            "data concerns. Use only the numbers above; do not invent any."
+        )
+        return {"cohort_summary": _chat(
+            backend,
+            "You are a careful scientific writer. Use only provided numbers.", user, seed)}
+
+    def analysis_agent(state: AgentState) -> dict:
+        r = state["results"]
+        menu = {"models": list(r["models"].keys()),
+                "metrics": ["harrell_c", "uno_c", "auc_12m", "auc_24m", "auc_36m",
+                            "integrated_brier_6_36m"],
+                "checks": [{"name": c["name"], "passed": c["passed"]} for c in r["checks"]]}
+        user = ("Choose what to discuss from this menu of already-computed items "
+                "(you cannot request new computations):\n" + json.dumps(menu, indent=1) +
+                "\nRespond with ONLY a JSON object: "
+                '{"focus_models": [...], "claims_to_make": [...], "must_disclose": [...]}')
+        resp = _chat(backend, "You are a planning agent. Reply with JSON only.", user, seed)
+        try:
+            plan = json.loads(resp)
+        except json.JSONDecodeError as exc:
+            resp2 = _chat(backend, "You are a planning agent. Reply with JSON only.",
+                          user, seed,
+                          extra_user=f"Your previous reply was not valid JSON ({exc}). "
+                                     "Return ONLY the JSON object.")
+            try:
+                plan = json.loads(resp2)
+                return {"analysis_plan": plan}
+            except json.JSONDecodeError:
+                return {"analysis_plan": {
+                            "focus_models": menu["models"],
+                            "claims_to_make": ["report all computed metrics"],
+                            "must_disclose": [c["name"] for c in r["checks"]
+                                              if not c["passed"]]},
+                        "analysis_plan_fallback": True}
+        return {"analysis_plan": plan}
+
+    def modeling_node(state: AgentState) -> dict:
+        """Deterministic: confirm recorded hashes still match files on disk."""
+        root = Path(state["root"])
+        r = state["results"]
+        from oncocs.config import load_cohort
+        cfg = load_cohort(state["cohort"], root)
+        problems = []
+        manifest = load_manifest(cfg, root)
+        canon = json.dumps({k: v for k, v in manifest.items() if k != "manifest_sha256"},
+                           sort_keys=True).encode()
+        if hashlib.sha256(canon).hexdigest() != r["data_manifest_sha256"]:
+            problems.append("data_manifest_sha256 mismatch")
+        split = load_split(cfg, root)
+        if split_sha256(split["train_ids"], split["test_ids"]) != r["split_sha256"]:
+            problems.append("split_sha256 mismatch")
+        flat = flatten_results(r)
+        flat.update({f"split.{k}": float(split[k]) for k in ("n_train", "n_test")})
+        if problems:
+            return {"status": "abstained",
+                    "verification": {"passed": False, "hash_problems": problems}}
+        return {"flat_values": flat,
+                "table_text": render_table(r, split)}
+
+    def report_agent(state: AgentState) -> dict:
+        attempts = state.get("attempts", 0) + 1
+        r = state["results"]
+        system = (
+            "You write cautious scientific summaries. Every number in your output must "
+            "come from the supplied results table exactly as displayed. If any check "
+            "failed, state the corresponding metrics as abstained. Forbidden phrasing: "
+            "'clinically validated', 'proves', 'causes', 'should be used', 'outperforms', "
+            "'state-of-the-art', 'robust', and 'significant' without an adjacent "
+            "verifiable p-value. Do not name models, versions, or patient identifiers."
+        )
+        user = (
+            "Results table (numbers at display precision; cite these only):\n"
+            + state["table_text"]
+            + "\n\nCohort summary:\n" + state["cohort_summary"]
+            + "\n\nAnalysis plan:\n" + json.dumps(state["analysis_plan"])
+            + "\n\nWrite a markdown report with exactly these sections, in order:\n"
+            "## Cohort\n## Models and metrics\n## Checks and abstentions\n## Limitations"
+        )
+        extra = None
+        if state.get("verification") and not state["verification"].get("passed", True):
+            v = state["verification"]
+            findings = []
+            for u in v.get("unverified_numbers", []):
+                findings.append(f"  - {u['token']} (context: {u['context']})")
+            for f in v.get("forbidden", []):
+                findings.append(f"  - forbidden phrasing: {f}")
+            for s in v.get("missing_sections", []):
+                findings.append(f"  - missing section: {s}")
+            if v.get("abstention_missing"):
+                findings.append("  - a failed check must be disclosed as an abstention")
+            extra = ("The following problems were found in your draft. Remove or "
+                     "correct them:\n" + "\n".join(findings))
+        return {"draft": _chat(backend, system, user, seed, extra_user=extra),
+                "attempts": attempts}
+
+    def claim_verifier(state: AgentState) -> dict:
+        v = verify_draft(state["draft"], state["flat_values"], state["results"]["checks"])
+        drafts = list(state.get("drafts", []))
+        drafts.append({"attempt": state["attempts"], "draft": state["draft"],
+                       "verification": v})
+        out = {"verification": v, "drafts": drafts}
+        if v["passed"]:
+            out["status"] = "draft_pending_approval"
+        elif state["attempts"] >= MAX_ATTEMPTS:
+            out["status"] = "rejected"
+        return out
+
+    def route_after_verify(state: AgentState):
+        if state["status"] == "draft_pending_approval" or state["status"] == "rejected":
+            return "human_gate"
+        return "report_agent"
+
+    def human_gate(state: AgentState) -> dict:
+        return {}
+
+    g = StateGraph(AgentState)
+    g.add_node("cohort_agent", cohort_agent)
+    g.add_node("analysis_agent", analysis_agent)
+    g.add_node("modeling_node", modeling_node)
+    g.add_node("report_agent", report_agent)
+    g.add_node("claim_verifier", claim_verifier)
+    g.add_node("human_gate", human_gate)
+    g.set_entry_point("cohort_agent")
+    g.add_edge("cohort_agent", "analysis_agent")
+    g.add_edge("analysis_agent", "modeling_node")
+    g.add_conditional_edges(
+        "modeling_node",
+        lambda s: END if s.get("status") == "abstained" else "report_agent")
+    g.add_edge("report_agent", "claim_verifier")
+    g.add_conditional_edges("claim_verifier", route_after_verify)
+    g.add_edge("human_gate", END)
+    return g.compile()
+
+
+UNAPPROVED_BANNER = "> **UNAPPROVED DRAFT — pending human review**"
+
+
+def render_report_md(draft: str, agent_run_sha256: str | None = None,
+                     approval: dict | None = None) -> str:
+    if approval:
+        banner = f"> Approved by {approval['by']} on {approval['timestamp'][:10]}"
+    else:
+        banner = UNAPPROVED_BANNER
+    meta = f"<!-- agent_run_sha256: {agent_run_sha256} -->\n" if agent_run_sha256 else ""
+    return f"{meta}{banner}\n\n{draft}\n"
+
+
+def run_agent(cohort: str, results_path: Path, backend, seed: int | None,
+              root: Path) -> dict:
+    """Run the graph, write agent_run.json + report.md, return the agent record."""
+    results = json.loads(Path(results_path).read_text(encoding="utf-8"))
+    results_sha = hashlib.sha256(Path(results_path).read_bytes()).hexdigest()
+    out_dir = Path(results_path).parent
+
+    from oncocs.config import load_cohort
+    from oncocs.llm.recorded import RecordingBackend
+    rec = backend if isinstance(backend, RecordingBackend) else RecordingBackend(backend)
+    split = load_split(load_cohort(cohort, root), root)
+    graph = build_graph(rec, seed=seed)
+    init: AgentState = {"cohort": cohort, "results_path": str(results_path),
+                        "root": str(root), "results": results, "split": split,
+                        "drafts": [], "attempts": 0, "status": "running"}
+    final = graph.invoke(init)
+
+    record = {
+        "agent_run_id": evidence.uuid.uuid4().hex[:12],
+        "timestamp": evidence.datetime.now(evidence.timezone.utc).isoformat(),
+        "cohort": cohort,
+        "results_path": str(results_path),
+        "results_sha256": results_sha,
+        "backend": backend.name,
+        "model_id": backend.model_id,
+        "temperature": 0.0,
+        "seed": seed,
+        "git_commit": evidence._git_commit(root),
+        "git_dirty": evidence._git_dirty(root),
+        "transcript": rec.transcript,
+        "drafts": final.get("drafts", []),
+        "cohort_summary": final.get("cohort_summary"),
+        "analysis_plan": final.get("analysis_plan"),
+        "analysis_plan_fallback": final.get("analysis_plan_fallback", False),
+        "status": final.get("status"),
+        "verification": final.get("verification"),
+        "final_report_sha256": None,
+    }
+    run_path = out_dir / "agent_run.json"
+    sha = agent_run_sha(record)
+    report_md = render_report_md(final.get("draft", ""), agent_run_sha256=sha)
+    (out_dir / "report.md").write_text(report_md, encoding="utf-8")
+    record["final_report_sha256"] = hashlib.sha256(report_md.encode()).hexdigest()
+    run_path.write_text(json.dumps(record, indent=2, default=str) + "\n",
+                        encoding="utf-8")
+    return record
+
+
+def agent_run_sha(record: dict) -> str:
+    """Canonical sha over the agent record, excluding approval and report hash."""
+    canon = {k: v for k, v in record.items()
+             if k not in ("final_report_sha256", "approval")}
+    return hashlib.sha256(json.dumps(canon, sort_keys=True, default=str).encode()).hexdigest()
