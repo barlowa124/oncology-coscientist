@@ -70,7 +70,7 @@ def reject(agent_run_path: Path, by: str, reason: str) -> Path:
     agent_run_path.write_text(json.dumps(record, indent=2, default=str) + "\n",
                             encoding="utf-8")
 
-    banner = f"> **REJECTED BY HUMAN REVIEWER ({by})** — {reason}"
+    banner = f"> **REJECTED BY HUMAN REVIEWER ({by})** - {reason}"
     if UNAPPROVED_BANNER in report:
         report = report.replace(UNAPPROVED_BANNER, banner, 1)
     else:

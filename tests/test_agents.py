@@ -1,4 +1,4 @@
-"""Offline tests for the agent layer. ScriptedBackend only — no Ollama needed."""
+"""Offline tests for the agent layer. ScriptedBackend only, no Ollama needed."""
 from __future__ import annotations
 
 import json

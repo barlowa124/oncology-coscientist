@@ -392,7 +392,7 @@ def cmd_agent_replay(args):
     status, msg = replay_agent(Path(args.agent_run))
     if status == "FROZEN":
         rec = _json.loads(Path(args.agent_run).read_text(encoding="utf-8"))
-        print(f"FROZEN: transcript mismatch at call {msg} — prompts changed "
+        print(f"FROZEN: transcript mismatch at call {msg}, prompts changed "
               f"since this run was recorded (recorded under commit "
               f"{rec.get('git_commit')}); drafts and verification remain as "
               f"preserved evidence.")

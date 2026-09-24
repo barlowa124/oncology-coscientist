@@ -56,19 +56,19 @@ Details:
   `load_clinical_patient`, `load_clinical_sample`, `load_mutations`,
   `load_expression` validate their raw frames; `harmonize` validates the
   harmonized survival frame via `validate_survival_frame`. Malformed frames
-  raise `pandera.errors.SchemaError` — nothing is silently coerced.
+  raise `pandera.errors.SchemaError`; nothing is silently coerced.
 
 ## check → what it rejects → where recorded
 
 | check | what it rejects | where recorded |
 |---|---|---|
-| `split_integrity` — `checks.check_split_integrity` | recomputed `split_sha256` ≠ recorded, any train/test id overlap, or >1% of split ids absent from the harmonized patient table | `results.json` → `checks[]` (`affects: all` → abstains every model) |
-| `min_events` — `checks.check_min_events` | fewer than 30 events in train or 10 in test | `results.json` → `checks[]` (`affects: all`) |
-| `covariates` — inline in `cli._run_pipeline` | zero covariates survived the >20% missingness filter in `harmonize` | `results.json` → `checks[]` (`affects: all`); all four models abstain |
-| `proportional_hazards` — `checks.check_proportional_hazards` | lifelines PH test rejects any covariate at p < 0.01 in the clinical Cox model | `results.json` → `checks[]` (`affects: cox_clinical`) |
-| `convergence` — `checks.check_convergence` | non-finite Cox `log_likelihood_` or `params_` | `results.json` → `checks[]` (`affects: cox`) |
-| `leakage` — `checks.check_leakage` | recomputed train-only imputation values, top-variance gene selection, or per-gene mean/std differ from what `prepare_features` recorded | `results.json` → `checks[]` (`affects: all`) |
-| hash recheck — `graph.modeling_node` (`oncocs/agents/graph.py`) | recorded `data_manifest_sha256` or `split_sha256` no longer matches files on disk at agent time | agent run `verification.hash_problems`; report renders as ABSTAINED banner |
+| `split_integrity` - `checks.check_split_integrity` | recomputed `split_sha256` ≠ recorded, any train/test id overlap, or >1% of split ids absent from the harmonized patient table | `results.json` → `checks[]` (`affects: all` → abstains every model) |
+| `min_events` - `checks.check_min_events` | fewer than 30 events in train or 10 in test | `results.json` → `checks[]` (`affects: all`) |
+| `covariates` - inline in `cli._run_pipeline` | zero covariates survived the >20% missingness filter in `harmonize` | `results.json` → `checks[]` (`affects: all`); all four models abstain |
+| `proportional_hazards` - `checks.check_proportional_hazards` | lifelines PH test rejects any covariate at p < 0.01 in the clinical Cox model | `results.json` → `checks[]` (`affects: cox_clinical`) |
+| `convergence` - `checks.check_convergence` | non-finite Cox `log_likelihood_` or `params_` | `results.json` → `checks[]` (`affects: cox`) |
+| `leakage` - `checks.check_leakage` | recomputed train-only imputation values, top-variance gene selection, or per-gene mean/std differ from what `prepare_features` recorded | `results.json` → `checks[]` (`affects: all`) |
+| hash recheck - `graph.modeling_node` (`oncocs/agents/graph.py`) | recorded `data_manifest_sha256` or `split_sha256` no longer matches files on disk at agent time | agent run `verification.hash_problems`; report renders as ABSTAINED banner |
 
 ## Inspecting a downloaded cohort
 

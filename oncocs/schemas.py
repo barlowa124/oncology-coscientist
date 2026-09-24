@@ -1,7 +1,7 @@
 """Pandera schemas for raw and harmonized cohort frames.
 
 Loaders validate against these schemas; a malformed frame raises
-pandera.errors.SchemaError rather than being silently coerced.
+pandera.errors.SchemaError instead of being silently coerced.
 """
 from __future__ import annotations
 

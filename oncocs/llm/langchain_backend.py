@@ -1,4 +1,4 @@
-"""Adapter over any langchain BaseChatModel — the pluggable path."""
+"""Adapter over any langchain BaseChatModel, the pluggable path."""
 from __future__ import annotations
 
 from oncocs.llm.ollama import _to_lc

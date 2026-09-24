@@ -12,7 +12,7 @@ from oncocs.llm.recorded import RecordedBackend, TranscriptMismatch
 def replay_agent(agent_run_path: Path) -> tuple[str, str]:
     """Return (status, message) where status is PASS, FAIL, or FROZEN.
     FROZEN means the recorded prompts no longer match what the current code
-    issues — the run predates a prompt change and is preserved as evidence."""
+    issues. The run predates a prompt change and is preserved as evidence."""
     agent_run_path = Path(agent_run_path)
     record = json.loads(agent_run_path.read_text(encoding="utf-8"))
     results = json.loads(Path(record["results_path"]).read_text(encoding="utf-8"))

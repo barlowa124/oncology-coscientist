@@ -310,7 +310,7 @@ def build_graph(backend, seed: int | None = None):
     return g.compile()
 
 
-UNAPPROVED_BANNER = "> **UNAPPROVED DRAFT — pending human review**"
+UNAPPROVED_BANNER = "> **UNAPPROVED DRAFT - pending human review**"
 
 
 def render_report_md(draft: str, agent_run_sha256: str | None = None,
@@ -319,7 +319,7 @@ def render_report_md(draft: str, agent_run_sha256: str | None = None,
                      drafts: list | None = None) -> str:
     meta = f"<!-- agent_run_sha256: {agent_run_sha256} -->\n" if agent_run_sha256 else ""
     if status == "rejected":
-        lines = [f"> **REJECTED — no verified report was produced after "
+        lines = [f"> **REJECTED - no verified report was produced after "
                  f"{len(drafts or [])} attempts.**", ""]
         for d in drafts or []:
             v = d["verification"]
@@ -347,7 +347,7 @@ def render_report_md(draft: str, agent_run_sha256: str | None = None,
                       "in `agent_run.json`."]
         return meta + "\n".join(lines) + "\n"
     if status == "abstained":
-        return meta + "> **ABSTAINED — recorded evidence hashes no longer match " \
+        return meta + "> **ABSTAINED - recorded evidence hashes no longer match " \
                       "the files on disk; no report produced.**\n"
     if approval:
         banner = f"> Approved by {approval['by']} on {approval['timestamp'][:10]}"
@@ -410,7 +410,7 @@ def run_agent(cohort: str, results_path: Path, backend, seed: int | None,
 
 
 def agent_run_sha(record: dict) -> str:
-    """Canonical sha over the agent record, excluding approval and report hash."""
+    """Canonical sha over the agent record, excluding review and report hash."""
     canon = {k: v for k, v in record.items()
-             if k not in ("final_report_sha256", "approval")}
+             if k not in ("final_report_sha256", "approval", "human_review")}
     return hashlib.sha256(json.dumps(canon, sort_keys=True, default=str).encode()).hexdigest()
