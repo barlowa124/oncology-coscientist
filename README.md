@@ -54,6 +54,13 @@ Survival Forest; BM25 retrieval over NCI PDQ; FastAPI review API; pluggable LLM
 backend (Ollama gemma3 by default, any LangChain chat model, recorded
 transcripts for replay).
 
+**2-minute tour:** [What the verifier caught](#what-the-verifier-caught) is
+the headline — documented, preserved LLM failure modes (fabricated metrics,
+misattributed model blocks, undisclosed abstention) caught by the
+verification layer. [Results across three cohorts](#results-across-three-cohorts-seed-20240601)
+has the headline survival-model numbers, and
+[Evidence record](#evidence-record) describes what every run persists.
+
 ```mermaid
 flowchart LR
     download --> split --> run --> results[results.json<br/>evidence record]
