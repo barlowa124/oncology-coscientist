@@ -167,7 +167,7 @@ def test_leakage_catches_overlap_and_global_gene_selection(synth_root):
     test = patients.index[200:].tolist()
     from oncocs.prep import prepare_features
     _, _, meta = prepare_features(patients, expr, train, test, kinds, 50, True)
-    # honest call passes
+    # clean call passes
     res = checks.check_leakage(patients.loc[train], expr.loc[train], kinds, 50,
                                meta["gene_cols"], meta["impute"], meta["scale"])
     assert res["passed"]
