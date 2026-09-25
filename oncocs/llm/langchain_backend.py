@@ -16,4 +16,9 @@ class LangChainBackend:
 
     def complete(self, messages: list[dict[str, str]], *,
                  temperature: float = 0.0, seed: int | None = None) -> str:
-        return self.chat_model.invoke(_to_lc(messages)).content
+        # bind passes through to models that accept these kwargs; the
+        # recorded transcript claims them, so don't silently drop them
+        kwargs = {"temperature": temperature}
+        if seed is not None:
+            kwargs["seed"] = seed
+        return self.chat_model.bind(**kwargs).invoke(_to_lc(messages)).content

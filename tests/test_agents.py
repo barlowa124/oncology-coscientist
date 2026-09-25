@@ -47,6 +47,31 @@ def test_verifier_rejects_fabricated_number():
     assert not v["passed"] and v["unverified_numbers"]
 
 
+def test_verifier_rejects_sign_flip():
+    # "-0.647" must not verify against +0.6466, and vice versa.
+    d = GOOD.replace("0.647", "-0.647")
+    v = verify_draft(d, FLAT, [])
+    assert not v["passed"] and v["unverified_numbers"]
+    neg_flat = dict(FLAT, **{"models.cox.harrell_c": -0.6466})
+    d2 = GOOD.replace("0.647", "-0.647")
+    assert verify_draft(d2, neg_flat, [])["passed"]
+    # hyphenated ranges still extract both endpoints unsigned
+    rng = GOOD.replace("0.647", "0.647-0.691")
+    assert verify_draft(rng, FLAT, [])["passed"]
+
+
+def test_verifier_misquote_tag_then_quote():
+    # tag-then-quote ordering must get the same verbatim check as
+    # quote-then-tag
+    passages = {"PDQ:doc#0": "Median survival was 18 months."}
+    good = GOOD + '\n\n## Context\n[PDQ:doc#0] "Median survival was 18 months."'
+    bad = GOOD + '\n\n## Context\n[PDQ:doc#0] "Median survival was 24 months."'
+    v_ok = verify_draft(good, FLAT, [], passages=passages)
+    assert not v_ok["misquotes"] and v_ok["passed"]
+    v_bad = verify_draft(bad, FLAT, [], passages=passages)
+    assert v_bad["misquotes"] and not v_bad["passed"]
+
+
 def test_verifier_rejects_forbidden_and_missing():
     assert "outperforms" in verify_draft(GOOD + " outperforms baselines", FLAT, [])["forbidden"]
     missing = verify_draft(GOOD.replace("## Cohort", "## Data"), FLAT, [])

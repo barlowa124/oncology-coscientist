@@ -24,6 +24,7 @@ class CohortConfig:
     stage_map: dict
     sample_type_suffix: str
     n_expression_genes: int
+    max_missing_fraction: float = 0.20
     mutation_genes: list = field(default_factory=list)
     entrez_ids: dict = field(default_factory=dict)
     excluded_genes: list = field(default_factory=list)
@@ -70,6 +71,7 @@ def load_cohort(name: str, root: Path | str = DEFAULT_ROOT) -> CohortConfig:
         stage_map=raw.get("stage_map", {}),
         sample_type_suffix=raw.get("sample_type_suffix", "-01"),
         n_expression_genes=int(raw.get("n_expression_genes", 50)),
+        max_missing_fraction=float(raw.get("max_missing_fraction", 0.20)),
         mutation_genes=list(raw.get("mutation_genes", [])),
         entrez_ids={k: int(v) for k, v in raw.get("entrez_ids", {}).items()},
         excluded_genes=list(raw.get("excluded_genes", [])),

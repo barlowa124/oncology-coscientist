@@ -141,11 +141,17 @@ def _run_pipeline(cfg, root, seed):
                 models[f"rsf/{fs}"]["gene_cols"] = meta["gene_cols"]
                 cox_out["gene_cols"] = meta["gene_cols"]
 
-        if fs == "clinical_expression":
-            run_checks.append(checks.check_leakage(
-                patients.loc[train_ids], expr.loc[train_ids], kinds,
-                cfg.n_expression_genes, meta["gene_cols"], meta["impute"], meta["scale"],
-                cfg.excluded_genes, cfg.excluded_gene_patterns))
+        # recompute-compare imputation/selection/scaling for every feature
+        # set, not only the expression one
+        chk = checks.check_leakage(
+            patients.loc[train_ids],
+            expr.loc[train_ids] if include_expr else None,
+            kinds,
+            cfg.n_expression_genes if include_expr else 0,
+            meta["gene_cols"], meta["impute"], meta["scale"],
+            cfg.excluded_genes, cfg.excluded_gene_patterns)
+        chk["name"] = f"leakage_{fs}"
+        run_checks.append(chk)
 
     if cox_clinical is not None:
         run_checks.append(checks.check_proportional_hazards(cox_clinical, cox_clinical_df))

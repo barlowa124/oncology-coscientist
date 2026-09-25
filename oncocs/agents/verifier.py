@@ -22,7 +22,10 @@ FORBIDDEN_REGEXES = [
      "C-index described as calibration"),
 ]
 
-_NUM_RE = re.compile(r"(?<![\w.%])\d[\d,]*(?:\.\d+)?\s*%?(?![\w.%])")
+# A leading '-' is part of the number only when it isn't preceded by a
+# word char/digit/dot — so "0.5-0.6" still extracts 0.5 and 0.6, while
+# " -0.544" keeps its sign (sign flips must not verify against +0.544).
+_NUM_RE = re.compile(r"(?<![\w.%])-?\d[\d,]*(?:\.\d+)?\s*%?(?![\w.%])")
 _SIG_RE = re.compile(r"\bsignificant\b", re.IGNORECASE)
 _PNUM_RE = re.compile(r"p\s*[=<≤]\s*(0?\.\d+|1\.0+|<\s*0?\.\d+)", re.IGNORECASE)
 
@@ -134,11 +137,15 @@ def verify_draft(draft: str, flat_values: dict[str, float],
     for m in _CITE_RE.finditer(draft):
         if m.group(0).strip("[]") not in passages:
             unknown_citations.append(m.group(0))
-    for rx, _gi in ((_QUOTE_THEN_TAG, 0), (_TAG_THEN_QUOTE, 1)):
-        for m in rx.finditer(draft):
-            quote, tag = m.group(1), m.group(2)
-            if tag.strip("[]") in passages and quote not in passages[tag.strip("[]")]:
-                misquotes.append({"tag": tag, "quote": quote})
+    quote_tag_pairs = [
+        (m.group(1), m.group(2)) for m in _QUOTE_THEN_TAG.finditer(draft)
+    ]
+    quote_tag_pairs += [
+        (m.group(2), m.group(1)) for m in _TAG_THEN_QUOTE.finditer(draft)
+    ]
+    for quote, tag in quote_tag_pairs:
+        if tag.strip("[]") in passages and quote not in passages[tag.strip("[]")]:
+            misquotes.append({"tag": tag, "quote": quote})
     tag_spans = [(m.start(), m.end()) for m in _CITE_RE.finditer(draft)]
     ctx_text = draft[ctx_span[0]:ctx_span[1]] if ctx_span else ""
     ctx_passage_text = ""
@@ -205,7 +212,8 @@ def verify_draft(draft: str, flat_values: dict[str, float],
 
     low = draft.lower()
     for phrase in FORBIDDEN_PHRASES:
-        if phrase in low:
+        # word-bounded: "improves"/"approves" must not trip "proves"
+        if re.search(r"\b" + re.escape(phrase) + r"\b", low):
             forbidden.append(phrase)
     if re.search(r"\brobust\b", low):
         forbidden.append("robust")

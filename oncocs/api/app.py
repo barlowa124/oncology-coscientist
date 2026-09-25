@@ -14,9 +14,11 @@ def create_app(root: Path) -> FastAPI:
     root = Path(root)
     app = FastAPI(title="oncocs review API")
 
+    results_root = (root / "results").resolve()
+
     def _results_dir(cohort: str, run_id: str) -> Path:
-        d = root / "results" / cohort / run_id
-        if not d.is_dir():
+        d = (results_root / cohort / run_id).resolve()
+        if not d.is_relative_to(results_root) or not d.is_dir():
             raise HTTPException(404, f"run not found: {cohort}/{run_id}")
         return d
 

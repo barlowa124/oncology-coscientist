@@ -101,12 +101,12 @@ def harmonize(
         for g in cfg.mutation_genes:
             cp.loc[unseq, f"mut_{g}"] = np.nan
 
-    # --- missingness report + drop covariates with >20% missing ---
+    # --- missingness report + drop covariates over the configured fraction ---
     for col in list(covar_cols):
         frac = float(cp[col].isna().mean()) if len(cp) else 0.0
         report["missingness"][col] = {"missing": int(cp[col].isna().sum()),
                                       "fraction": round(frac, 4)}
-        if frac > 0.20:
+        if frac > cfg.max_missing_fraction:
             report["dropped_covariates"].append(col)
             del covar_cols[col]
 
