@@ -14,7 +14,7 @@ Two different things are evaluated here, and they have opposite outcomes.
 
 1. **The software passes.** The deterministic survival pipeline (Cox PH, RSF,
    metrics, assumption checks) verifies and replays bit-for-bit on all three
-   cohorts. The offline test suite passes (45 tests). Every number in the
+   cohorts. The offline test suite passes (74 tests). Every number in the
    results tables below comes from that code.
 2. **Gemma's written reports mostly do not pass.** After the numbers are
    computed, a local Gemma 3 model is asked only to *describe* them. Across the
@@ -178,8 +178,9 @@ GBM) and human review rejected it. No report has been approved.
 
 FROZEN runs predate a prompt change and are not re-verified:
 
-- LUAD `76a00fdba97d` (4b): passed verifier. **Human-rejected** for the
-  misattribution described above.
+- LUAD `76a00fdba97d` (4b): passed the numeric verifier. It shares the
+  misattribution defect but predates the `human_review` field, so its
+  recorded status stays `draft_pending_approval`.
 - LUAD `7b433c558b79` (4b): same semantic defect, first recorded instance.
 - LUAD `4918eaf618e7` (4b): rejected for mislabeling the C-index as calibration,
   then unscoped model numbers.
