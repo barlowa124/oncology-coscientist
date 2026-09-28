@@ -37,7 +37,7 @@ Details:
   `_fetch_mutations_api` queries `https://www.cbioportal.org/api/mutations/fetch`
   for the cohort's configured `entrez_ids` and writes a minimal MAF-style TSV.
 - `cases_sequenced` (`case_lists/cases_sequenced.txt`) is loaded by
-  `load_cases_sequenced`; `harmonize` uses it to mark mutation indicators as
+  `load_cases_sequenced`. `harmonize` uses it to mark mutation indicators as
   NaN (not 0) for patients whose samples were never sequenced.
 - `harmonize(cfg, cp, cs, expr, mut, sequenced)` maps OS status through
   `cfg.os_status_map`, drops missing/nonpositive survival, restricts to
@@ -54,9 +54,9 @@ Details:
   do not invalidate computed results.
 - Schema validation (pandera, `oncocs/schemas.py`) runs inside the loaders:
   `load_clinical_patient`, `load_clinical_sample`, `load_mutations`,
-  `load_expression` validate their raw frames; `harmonize` validates the
+  `load_expression` validate their raw frames. `harmonize` validates the
   harmonized survival frame via `validate_survival_frame`. Malformed frames
-  raise `pandera.errors.SchemaError`; nothing is silently coerced.
+  raise `pandera.errors.SchemaError`. Nothing is silently coerced.
 
 ## check → what it rejects → where recorded
 

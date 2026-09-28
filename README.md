@@ -46,7 +46,7 @@ work, which reconstructs Gemma inference layer by layer against a pinned
 checkpoint. Note the gap: that work is bound to a specific Hugging Face
 checkpoint and runtime, while the runs here use Ollama's quantized gemma3 GGUF
 builds. Any mechanistic explanation must first be shown to apply to the model
-that actually produced these drafts. Until then, this repository claims only
+that produced these drafts. Until then, this repository claims only
 what it can show: the fabrication happens, it is reproducible, and it is caught.
 
 Stack: LangGraph StateGraph agents, lifelines Cox PH and scikit-survival Random
@@ -224,7 +224,7 @@ survive missingness).
 
 Acquisition order (S3 archive → per-file DataHub → raw GitHub fallback →
 cBioPortal API for mutations), SHA-256 manifesting, LFS-pointer detection,
-harmonization, missingness filtering, and split freezing are documented in
+harmonization, missingness filtering and split freezing are documented in
 [docs/DATA_PIPELINE.md](docs/DATA_PIPELINE.md). `oncocs qc --cohort X` audits
 already-downloaded raw data and writes `results/<cohort>/<run>/qc.json`:
 
@@ -264,7 +264,7 @@ per-model metrics (or abstention reasons). `oncocs verify` recomputes the
 hashes and reruns the pipeline. Agent runs write
 `results/<cohort>/<run_id>/agent/<agent_run_id>/{agent_run.json,report.md}`, which hold
 the full prompt transcript (replayable via `RecordedBackend`), every draft with
-its verification, the analysis plan, status, and human-review metadata.
+its verification, the analysis plan, status and human-review metadata.
 
 ## API
 
@@ -281,7 +281,7 @@ records human decisions only and cannot trigger pipeline or agent runs.
 - Public retrospective TCGA data. Results reflect the dataset, not any clinical
   claim.
 - The verifier checks number provenance and model attribution, forbidden
-  phrasing, section structure, abstention disclosure, and citation integrity.
+  phrasing, section structure, abstention disclosure and citation integrity.
   It does **not** check the scientific correctness of prose. That is what the
   human gate is for.
 - Local small-parameter models are used for drafting. Failure modes observed
