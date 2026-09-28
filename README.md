@@ -310,3 +310,8 @@ oncocs/                          package: data, models, checks, evidence,
                                  rag (fetch/retrieve), api (FastAPI review)
 tests/                           offline tests (synthetic fixtures)
 ```
+
+## Related work
+
+- [bioprocess-decision-runtime](https://github.com/barlowa124/bioprocess-decision-runtime) applies the same claims-bound-to-computation discipline one layer down: bit-exact replay certificates instead of a report verifier.
+- [llm-posttraining](https://github.com/barlowa124/llm-posttraining) studies the abstention-vs-fabrication trade-off that this repo's verifier enforces procedurally.
