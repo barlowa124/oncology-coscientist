@@ -318,3 +318,4 @@ tests/                           offline tests (synthetic fixtures)
 
 - [bioprocess-decision-runtime](https://github.com/barlowa124/bioprocess-decision-runtime) applies the same claims-bound-to-computation discipline one layer down: bit-exact replay certificates instead of a report verifier.
 - [llm-posttraining](https://github.com/barlowa124/llm-posttraining) studies the abstention-vs-fabrication trade-off that this repo's verifier enforces procedurally.
+- [vector-db-mcp](https://github.com/barlowa124/vector-db-mcp) supplies the optional `rag_mode: embed` path: its `vdb_mcp.embed` E5 embedder replaces BM25 scoring when installed. BM25 stays the default. `results/rag_mode_comparison.json` records the per-query agreement.
