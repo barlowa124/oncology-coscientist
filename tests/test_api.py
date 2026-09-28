@@ -51,7 +51,6 @@ def test_approve_and_conflicts(client):
 
 
 def test_path_containment(client):
-    run_id = client.synth["run_id"]
     # Segment escapes must 404, not resolve outside results/
     assert client.get("/runs/../cohorts/x").status_code in (404, 422)
     assert client.get("/runs/%2E%2E/%2E%2E").status_code in (404, 422)
