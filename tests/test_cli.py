@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from oncocs.cli import main
 from tests.test_agents import (
@@ -50,3 +51,42 @@ def test_agent_replay_and_cli_approve_reject(synth_results):
     # second decision on the same run must fail closed
     assert main(_argv(root, "reject", str(run_path),
                       "--by", "x", "--reason", "late")) == 1
+
+
+def test_rag_retrieve_modes():
+    from oncocs.rag.retrieve import retrieve
+
+    q = "non-small cell lung cancer overall survival treatment"
+    bm = retrieve(q, top_k=5, mode="bm25")
+    tf = retrieve(q, top_k=5, mode="tfidf")
+    assert bm and tf
+    assert all(t.startswith("PDQ:") for t in bm)
+    assert all(t.startswith("PDQ:") for t in tf)
+
+
+def test_rag_retrieve_unknown_mode_and_embed_guard():
+    import pytest
+
+    from oncocs.rag.retrieve import retrieve
+    with pytest.raises(ValueError):
+        retrieve("x", mode="bogus")
+    with pytest.raises(RuntimeError, match="vector-db-mcp"):
+        retrieve("x", mode="embed")
+
+
+def test_rag_compare_writes_artifact(synth_root, tmp_path):
+    import shutil
+
+    # rag/corpus lives at repo root; copy it into the fixture root
+    corpus_src = Path(__file__).resolve().parents[1] / "rag" / "corpus"
+    dst = synth_root / "rag" / "corpus"
+    dst.mkdir(parents=True)
+    for f in corpus_src.glob("*.txt"):
+        shutil.copy(f, dst)
+    main(_argv(synth_root, "rag", "compare",
+               "--queries", "lung cancer survival;brca treatment",
+               "--modes", "bm25,tfidf"))
+    out = json.loads((synth_root / "results" / "rag_mode_comparison.json")
+                     .read_text())
+    assert len(out["per_query"]) == 2
+    assert "tfidf" in out["per_query"][0]["overlap_with_first_mode"]

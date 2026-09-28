@@ -31,6 +31,7 @@ class CohortConfig:
     excluded_gene_patterns: list = field(default_factory=list)
     rag_query: str = ""
     rag_docs: list = field(default_factory=list)
+    rag_mode: str = "bm25"
     config_sha256: str = ""
 
     @property
@@ -53,7 +54,7 @@ def _sha256_of_obj(obj) -> str:
 # Cohort-yaml keys that affect only the agent/RAG reporting layer, not the
 # deterministic analysis. They are excluded from config_sha256 so prompt-side
 # edits do not invalidate computed results.
-AGENT_ONLY_KEYS = ("rag_query", "rag_docs")
+AGENT_ONLY_KEYS = ("rag_query", "rag_docs", "rag_mode")
 
 
 def load_cohort(name: str, root: Path | str = DEFAULT_ROOT) -> CohortConfig:
@@ -78,6 +79,7 @@ def load_cohort(name: str, root: Path | str = DEFAULT_ROOT) -> CohortConfig:
         excluded_gene_patterns=list(raw.get("excluded_gene_patterns", [])),
         rag_query=raw.get("rag_query", ""),
         rag_docs=list(raw.get("rag_docs", [])),
+        rag_mode=raw.get("rag_mode", "bm25"),
     )
     cfg.config_sha256 = _sha256_of_obj(
         {k: v for k, v in raw.items() if k not in AGENT_ONLY_KEYS})

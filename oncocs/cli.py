@@ -459,6 +459,29 @@ def cmd_rag_fetch(args):
                       "bytes": sum(v["bytes"] for v in m["members"].values())}, indent=2))
 
 
+def cmd_rag_compare(args):
+    """Compare retrieval modes on the same queries; writes
+    results/rag_mode_comparison.json."""
+    from oncocs.rag.retrieve import retrieve
+    root = Path(args.data_dir)
+    queries = [q.strip() for q in args.queries.split(";") if q.strip()]
+    modes = [m.strip() for m in args.modes.split(",") if m.strip()]
+    out = {"queries": queries, "modes": modes, "per_query": []}
+    for q in queries:
+        entry = {"query": q, "per_mode": {}}
+        tag_sets = {}
+        for m in modes:
+            hits = retrieve(q, root, top_k=args.top_k, mode=m)
+            entry["per_mode"][m] = list(hits)
+            tag_sets[m] = set(hits)
+        entry["overlap_with_first_mode"] = {
+            m: sorted(tag_sets[m] & tag_sets[modes[0]]) for m in modes[1:]}
+        out["per_query"].append(entry)
+    dest = root / "results" / "rag_mode_comparison.json"
+    dest.write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
+    print(f"Wrote {dest}")
+
+
 def cmd_serve(args):
     import uvicorn
 
@@ -528,6 +551,12 @@ def main(argv=None):
     rgs = rg.add_subparsers(dest="rag_command", required=True)
     rf = rgs.add_parser("fetch")
     rf.set_defaults(fn=cmd_rag_fetch)
+    rc = rgs.add_parser("compare")
+    rc.add_argument("--queries", required=True,
+                    help="semicolon-separated queries to compare")
+    rc.add_argument("--modes", default="bm25,tfidf")
+    rc.add_argument("--top-k", type=int, default=5)
+    rc.set_defaults(fn=cmd_rag_compare)
 
     sv = sub.add_parser("serve")
     sv.add_argument("--host", default="127.0.0.1")

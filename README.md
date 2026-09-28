@@ -210,6 +210,9 @@ python -m oncocs agent run --cohort luad --results results/luad/<run_id>/results
 python -m oncocs agent replay results/luad/<run_id>/agent/<agent_id>/agent_run.json
 python -m oncocs approve <agent_run.json> --by "<name>"   # or: reject --reason "..."
 python -m oncocs agent summarize                 # results/agent_model_comparison.json
+python -m oncocs rag compare --queries "q1;q2" --modes bm25,tfidf
+#     -> results/rag_mode_comparison.json. Retrieval mode is a per-cohort
+#     config key (rag_mode: bm25|tfidf|embed); "embed" needs vector-db-mcp[embed].
 python -m oncocs serve --port 8000               # review API on 127.0.0.1
 ```
 

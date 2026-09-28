@@ -125,11 +125,12 @@ def build_graph(backend, seed: int | None = None):
             "You are a careful scientific writer. Use only provided numbers.", user, seed)}
 
     def context_agent(state: AgentState) -> dict:
-        """Deterministic: BM25-retrieve top-5 PDQ passages for the cohort."""
+        """Deterministic: retrieve top-5 PDQ passages for the cohort."""
         from oncocs.config import load_cohort
         from oncocs.rag.retrieve import retrieve
         cfg = load_cohort(state["cohort"], state["root"])
-        passages = retrieve(cfg.rag_query, state["root"]) if cfg.rag_query else {}
+        passages = retrieve(cfg.rag_query, state["root"], mode=cfg.rag_mode) \
+            if cfg.rag_query else {}
         return {"passages": passages}
 
     def analysis_agent(state: AgentState) -> dict:

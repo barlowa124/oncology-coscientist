@@ -24,8 +24,25 @@ def load_passages(root: Path | str = DEFAULT_ROOT) -> dict[str, str]:
     return passages
 
 
-def retrieve(query: str, root: Path | str = DEFAULT_ROOT, top_k: int = 5) -> dict[str, str]:
-    """Top-k passages for the query; returns {tag: text} preserving rank order."""
+def retrieve(query: str, root: Path | str = DEFAULT_ROOT, top_k: int = 5,
+             mode: str = "bm25") -> dict[str, str]:
+    """Top-k passages for the query; returns {tag: text} preserving rank order.
+
+    mode selects the scorer: "bm25" (default), "tfidf" (hashed TF-IDF
+    cosine), or "embed" (E5 via vector-db-mcp[embed]).
+    """
+    if mode == "bm25":
+        return _retrieve_bm25(query, root, top_k)
+    from oncocs.rag.vector_retrieve import retrieve_embed, retrieve_tfidf
+    if mode == "tfidf":
+        return retrieve_tfidf(query, root, top_k)
+    if mode == "embed":
+        return retrieve_embed(query, root, top_k)
+    raise ValueError(f"unknown retrieve mode {mode!r}")
+
+
+def _retrieve_bm25(query: str, root: Path | str = DEFAULT_ROOT,
+                   top_k: int = 5) -> dict[str, str]:
     passages = load_passages(root)
     if not passages:
         return {}
