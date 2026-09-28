@@ -1,6 +1,7 @@
 """Offline tests for the agent layer. ScriptedBackend only, no Ollama needed."""
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -216,6 +217,30 @@ def test_approve_and_tamper_refusal(synth_results):
         approve(run_path, by="attacker")
 
 
+def test_approve_refuses_modified_report_body(synth_results):
+    """Editing report prose while keeping the embedded hash marker must
+    block approval: the marker only covers agent_run.json."""
+    rec = _agent_run(synth_results.parents[3], synth_results, _scripted_ok(synth_results))
+    run_path = _run_path(synth_results, rec)
+    rp = _report_path(synth_results, rec)
+    rp.write_text(rp.read_text(encoding="utf-8") + "\ninjected paragraph\n",
+                  encoding="utf-8")
+    with pytest.raises(ValueError):
+        approve(run_path, by="attacker")
+    assert "approval" not in json.loads(run_path.read_text())
+
+
+def test_approve_records_post_banner_report_hash(synth_results):
+    rec = _agent_run(synth_results.parents[3], synth_results, _scripted_ok(synth_results))
+    run_path = _run_path(synth_results, rec)
+    approve(run_path, by="tester")
+    record = json.loads(run_path.read_text())
+    md = _report_path(synth_results, rec).read_bytes()
+    assert record["approval"]["report_sha256"] == hashlib.sha256(md).hexdigest()
+    # final_report_sha256 still describes the pre-decision rendered bytes
+    assert record["final_report_sha256"] == rec["final_report_sha256"]
+
+
 # ---------- reject ----------
 
 def test_reject_and_mutual_exclusion(synth_results):
@@ -238,6 +263,18 @@ def test_reject_and_mutual_exclusion(synth_results):
     approve(rp2, by="tester")
     with pytest.raises(ValueError):
         reject(rp2, by="lead", reason="too late")
+
+
+def test_reject_refuses_modified_report_body(synth_results):
+    from oncocs.agents.approve import reject
+    rec = _agent_run(synth_results.parents[3], synth_results, _scripted_ok(synth_results))
+    rp = _report_path(synth_results, rec)
+    rp.write_text(rp.read_text(encoding="utf-8") + "\ninjected paragraph\n",
+                  encoding="utf-8")
+    run_path = _run_path(synth_results, rec)
+    with pytest.raises(ValueError):
+        reject(run_path, by="lead", reason="x")
+    assert "human_review" not in json.loads(run_path.read_text())
 
 
 # ---------- scoped claim verification ----------
