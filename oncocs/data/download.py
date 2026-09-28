@@ -11,6 +11,12 @@ import requests
 
 from oncocs.config import DEFAULT_ROOT, CohortConfig
 
+ARCHIVE_TIMEOUT_S = 120   # cohort archive GET
+FILE_TIMEOUT_S = 600      # per-file downloads (large expression matrices)
+API_TIMEOUT_S = 300       # cBioPortal mutation fetch
+MAX_FETCH_ATTEMPTS = 5
+RETRY_DELAY_S = 10
+
 
 def _sha256_file(path: Path) -> str:
     h = hashlib.sha256()
@@ -44,7 +50,7 @@ def download_cohort(cfg: CohortConfig, root: Path | str = DEFAULT_ROOT) -> dict:
     if not fetched and cfg.archive_url:
         print(f"Downloading {cfg.archive_url} ...")
         try:
-            resp = requests.get(cfg.archive_url, stream=True, timeout=120)
+            resp = requests.get(cfg.archive_url, stream=True, timeout=ARCHIVE_TIMEOUT_S)
             resp.raise_for_status()
             with open(archive_path, "wb") as fh:
                 for chunk in resp.iter_content(1 << 20):
@@ -89,7 +95,7 @@ def download_cohort(cfg: CohortConfig, root: Path | str = DEFAULT_ROOT) -> dict:
                 print(f"Downloading {url} ...")
                 done = False
                 try:
-                    resp = requests.get(url, timeout=600)
+                    resp = requests.get(url, timeout=FILE_TIMEOUT_S)
                     resp.raise_for_status()
                     if not _is_lfs_pointer(resp.content):
                         dest.write_bytes(resp.content)
@@ -99,7 +105,7 @@ def download_cohort(cfg: CohortConfig, root: Path | str = DEFAULT_ROOT) -> dict:
                 if not done and cfg.file_base_url_alt:
                     alt = f"{cfg.file_base_url_alt.rstrip('/')}/{name}"
                     try:
-                        resp = requests.get(alt, timeout=600)
+                        resp = requests.get(alt, timeout=FILE_TIMEOUT_S)
                         resp.raise_for_status()
                         if not _is_lfs_pointer(resp.content):
                             dest.write_bytes(resp.content)
@@ -153,20 +159,20 @@ def _fetch_mutations_api(cfg: CohortConfig, dest: Path) -> None:
     profile = f"{study}_mutations"
     entrez = {g: cfg.entrez_ids[g] for g in cfg.mutation_genes if g in cfg.entrez_ids}
     body = {"entrezGeneIds": list(entrez.values()), "sampleListId": f"{study}_all"}
-    for attempt in range(5):
+    for attempt in range(MAX_FETCH_ATTEMPTS):
         try:
             r = requests.post(
                 f"{CBIOPORTAL_API}/molecular-profiles/{profile}/mutations/fetch",
                 params={"projection": "DETAILED"},
                 json=body,
-                timeout=300,
+                timeout=API_TIMEOUT_S,
             )
             r.raise_for_status()
             break
         except requests.RequestException:
-            if attempt == 4:
+            if attempt == MAX_FETCH_ATTEMPTS - 1:
                 raise
-            time.sleep(10)
+            time.sleep(RETRY_DELAY_S)
     rows = r.json()
     with open(dest, "w", encoding="utf-8") as fh:
         fh.write("Hugo_Symbol\tTumor_Sample_Barcode\tVariant_Classification\n")

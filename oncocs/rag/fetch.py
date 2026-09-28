@@ -13,6 +13,8 @@ import yaml
 
 from oncocs.config import DEFAULT_ROOT
 
+REQUEST_TIMEOUT_S = 120
+
 LICENSE_NOTE = (
     "NCI PDQ summaries are U.S. public domain. NCI asks that reproduced "
     "content carry the suggested citation recorded in 'citation'."
@@ -78,7 +80,7 @@ def fetch_corpus(root: Path | str = DEFAULT_ROOT) -> dict:
         dest = corpus / f"{doc_id}.txt"
         if not dest.exists():
             print(f"Fetching {url} ...")
-            resp = requests.get(url, timeout=120,
+            resp = requests.get(url, timeout=REQUEST_TIMEOUT_S,
                                 headers={"User-Agent": "oncocs-research/0.1"})
             resp.raise_for_status()
             dest.write_text("\n\n".join(html_to_paragraphs(resp.text)),
