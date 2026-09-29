@@ -82,7 +82,7 @@ flowchart LR
 | GBM | 580 | 335 / 143 | 2 passed; all 4 models abstained | - |
 | BRCA | 1071 | 106 / 45 | all 5 passed | 0.708 - cox/clinical |
 
-- GBM has no AJCC stage in this study (`stage: null`; recorded as
+- GBM has no AJCC stage in this study (`stage: null`, recorded as
   `omitted_covariates`), 49% of patients lack age/sex, and 33% are unsequenced.
   Every covariate exceeded the 20% missingness filter, so the run records a
   `covariates` check failure and all four models abstain, a legitimate result.
@@ -93,7 +93,7 @@ Results were regenerated at f61a25f after the config-hash scope fix. Metrics
 are byte-identical to the earlier run dirs, which are preserved with their
 agent runs.
 
-LUAD in detail (all checks passed; references: stage I, sex Female):
+LUAD in detail (all checks passed, references: stage I, sex Female):
 
 | Model / features | Harrell C | Uno C | AUC 12m | AUC 24m | AUC 36m | IBS 6–36m |
 |---|---|---|---|---|---|---|
