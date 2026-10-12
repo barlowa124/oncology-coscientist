@@ -49,10 +49,18 @@ builds. Any mechanistic explanation must first be shown to apply to the model
 that produced these drafts. Until then, this repository claims only
 what it can show: the fabrication happens, it is reproducible, and it is caught.
 
-Stack: LangGraph StateGraph agents, lifelines Cox PH and scikit-survival Random
-Survival Forest, BM25 retrieval over NCI PDQ, FastAPI review API, pluggable LLM
-backend (Ollama gemma3 by default, any LangChain chat model, recorded
-transcripts for replay).
+The stack is LangGraph StateGraph agents, lifelines Cox PH and
+scikit-survival Random Survival Forest, BM25 retrieval over NCI PDQ, a
+FastAPI review API, and a pluggable LLM backend (Ollama gemma3 by
+default, any OpenAI-compatible endpoint, any LangChain chat model,
+recorded transcripts for replay).
+
+Retrieval is citation-gated, not decorative. Passages carry deterministic
+`PDQ:<doc>#<para>` tags. A draft may only cite tags the retriever
+returned, quoted text must match the cited passage verbatim, and numbers
+in the Context section must come from the cited passage rather than the
+results table. The verifier rejects drafts that cite unlisted tags,
+paraphrase quotes, or pull results-table numbers into retrieved context.
 
 **2-minute tour:** [What the verifier caught](#what-the-verifier-caught) is
 the headline: documented, preserved LLM failure modes (fabricated metrics,
