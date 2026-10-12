@@ -9,6 +9,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# scikit-survival and ecos ship x86_64 wheels only; on aarch64 they
+# build from source and need a compiler.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends gcc g++ \
+ && rm -rf /var/lib/apt/lists/*
+
 COPY pyproject.toml README.md LICENSE ./
 COPY oncocs ./oncocs
 COPY cohorts ./cohorts
