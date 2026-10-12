@@ -53,6 +53,30 @@ def test_request_shape(monkeypatch):
     assert calls["headers"]["Authorization"] == "Bearer k"
 
 
+def test_generation_bounds_in_request(monkeypatch):
+    """max_tokens bounds the generation; ailm_attention stays off so the
+    receipt's per-step attention capture doesn't halve throughput."""
+    calls = {}
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        calls.update(json=json)
+        return _Resp(200, {"choices": [{"message": {"content": "ok"}}]})
+
+    monkeypatch.setattr("requests.post", fake_post)
+    monkeypatch.delenv("ONCOCS_LLM_MAX_TOKENS", raising=False)
+    b = EndpointBackend(base_url="http://colab/v1", model="m")
+    b.complete([{"role": "user", "content": "hi"}], temperature=0.0)
+    assert calls["json"]["max_tokens"] == 1024
+    assert calls["json"]["ailm_attention"] is False
+
+    monkeypatch.setenv("ONCOCS_LLM_MAX_TOKENS", "512")
+    monkeypatch.setenv("ONCOCS_LLM_INTERNALS", "1")
+    b = EndpointBackend(base_url="http://colab/v1", model="m")
+    b.complete([{"role": "user", "content": "hi"}], temperature=0.0)
+    assert calls["json"]["max_tokens"] == 512
+    assert "ailm_attention" not in calls["json"]
+
+
 def test_error_status_and_malformed(monkeypatch):
     monkeypatch.setattr("requests.post",
                         lambda *a, **k: _Resp(502, text="bad gateway"))

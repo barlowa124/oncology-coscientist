@@ -9,6 +9,11 @@ hosted API. Configuration is environment-only:
   ONCOCS_LLM_MODEL      e.g. google/gemma-3-4b-it
   ONCOCS_LLM_API_KEY    optional bearer token
   ONCOCS_LLM_TIMEOUT    seconds, default 300
+  ONCOCS_LLM_MAX_TOKENS generation bound sent as max_tokens, default 1024;
+                        keep under ~85s of server-side generation or a
+                        Cloudflare-tunneled endpoint 502s mid-report
+  ONCOCS_LLM_INTERNALS  set to 1 to request ailm internals receipts
+                        (attention capture roughly halves throughput)
 
 Requests are plain HTTP via `requests` — no SDK dependency, so the
 backend works in the slim Docker image unchanged.
@@ -33,6 +38,10 @@ class EndpointBackend:
             "ONCOCS_LLM_API_KEY")
         self.timeout = float(
             timeout or os.environ.get("ONCOCS_LLM_TIMEOUT", "300"))
+        self.max_tokens = int(
+            os.environ.get("ONCOCS_LLM_MAX_TOKENS", "1024"))
+        self.want_internals = os.environ.get(
+            "ONCOCS_LLM_INTERNALS", "") == "1"
         if not self.base_url:
             raise ValueError(
                 "endpoint backend needs ONCOCS_LLM_BASE_URL "
@@ -47,7 +56,10 @@ class EndpointBackend:
             "model": self.model_id,
             "messages": messages,
             "temperature": temperature,
+            "max_tokens": self.max_tokens,
         }
+        if not self.want_internals:
+            body["ailm_attention"] = False
         if seed is not None:
             body["seed"] = seed
         headers = {"Content-Type": "application/json"}

@@ -154,6 +154,21 @@ def test_analysis_json_fenced_and_fallback(synth_results):
     assert rec["analysis_plan_fallback"] is True
 
 
+def test_report_prompt_grounds_numbers(synth_results):
+    """The report prompt must pin the table as sole numeric source and bar
+    per-covariate enumeration, which exhausts the generation budget and
+    invites fabricated p-values."""
+    responses = ["cohort text", '{"focus_models": []}',
+                 *_scripted_ok(synth_results)[2:]]
+    rec = _agent_run(synth_results.parents[3], synth_results, responses)
+    # transcript calls: 0 cohort, 1 analysis, 2 report attempt 1
+    report_msgs = rec["transcript"][2]["messages"]
+    system, user = report_msgs[0]["content"], report_msgs[1]["content"]
+    assert "do not list per-covariate hazard ratios" in system
+    assert "sole numeric" in user
+    assert "advisory" in user
+
+
 def test_retry_prompt_contains_previous_draft(synth_results):
     bad = "## Cohort\n0.99999 fabricated.\n"
     responses = ["cohort text", '{"focus_models": []}',

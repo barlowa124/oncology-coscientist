@@ -196,7 +196,8 @@ def build_graph(backend, seed: int | None = None):
             "come from the supplied results table exactly as displayed. If any check "
             "failed, state the corresponding metrics as abstained. Forbidden phrasing: "
             "'clinically validated', 'proves', 'causes', 'should be used', 'outperforms', "
-            "'state-of-the-art', 'robust', and 'significant' without an adjacent "
+            "'state-of-the-art', 'robust' (in any form, including hedged uses "
+            "like 'might be robust'), and 'significant' without an adjacent "
             "verifiable p-value. Do not name the language model, software versions, "
             "or patient identifiers. "
             "Describe each check by its recorded outcome and detail; do not infer "
@@ -209,16 +210,23 @@ def build_graph(backend, seed: int | None = None):
             "calibration_24m is the agreement between predicted and observed "
             "survival at 24 months. Do not call a concordance index a calibration "
             "metric. When citing a model-specific number, name the model key "
-            "it belongs to in the same sentence or bullet."
+            "it belongs to in the same sentence or bullet. Report model-level "
+            "metrics only; do not list per-covariate hazard ratios, confidence "
+            "intervals, or p-values."
         )
         user = (
-            "Results table (numbers at display precision; cite these only):\n"
+            "Results table (numbers at display precision; the sole numeric "
+            "source):\n"
             + state["table_text"]
-            + "\n\nCohort summary:\n" + state["cohort_summary"]
+            + "\n\nCohort summary (advisory prose; the table wins on any "
+            "conflict, and no number may appear that is absent from the "
+            "table):\n" + state["cohort_summary"]
             + "\n\nAnalysis plan:\n" + json.dumps(state["analysis_plan"])
             + "\n\nWrite a markdown report with exactly these sections, in order:\n"
             "## Cohort\n## Models and metrics\n## Checks and abstentions\n## Limitations\n"
-            "The headers must appear verbatim as shown above (## + exact title)."
+            "The headers must appear verbatim as shown above (## + exact title). "
+            "Keep each section to a few sentences or bullets so all four "
+            "sections fit in one reply."
         )
         if state.get("passages"):
             listed = "\n".join(f"[{tag}] \"{text}\""
@@ -227,10 +235,11 @@ def build_graph(backend, seed: int | None = None):
             user += (
                 "\n\nRetrieved public-domain passages you may cite:\n" + listed +
                 "\n\nOptionally append a '## Context' section after Limitations. "
-                "In it, any sentence quoting a passage must end with its citation "
-                f"tag, e.g. \"...quoted text...\" [{example_tag}]. Quote verbatim only; "
-                "never cite a tag not listed above; numbers in Context must come "
-                "from the cited passage, not the results table.")
+                "Cite by paraphrase only: write the claim in your own words and "
+                f"end the sentence with the bare tag, e.g. ... [{example_tag}]. "
+                "Never put passage text in quotation marks; never cite a tag "
+                "not listed above; numbers in Context must come from the "
+                "cited passage, not the results table.")
         extra = None
         if state.get("verification") and not state["verification"].get("passed", True):
             v = state["verification"]
