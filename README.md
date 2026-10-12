@@ -255,8 +255,12 @@ docker run -v "$PWD/results:/app/results" -v "$PWD/data:/app/data" \
            -v "$PWD/splits:/app/splits" -v "$PWD/rag:/app/rag" -p 8000:8000 oncocs
 ```
 
-The container serves the review API over saved runs. The LLM backend (Ollama)
-is **not** in the image. Agent runs happen outside the container.
+The image builds the React UI (`web/`, served at `/ui`) and installs the
+`deploy` extra. The LLM backend is **not** in the image. The model lives
+behind `ONCOCS_LLM_BASE_URL`, any OpenAI-compatible endpoint (a Colab
+vLLM/Ollama tunnel, llama.cpp, or a hosted API). `docker compose up`
+brings up the API with a Postgres mirror for run records. See
+[docs/DEPLOY.md](docs/DEPLOY.md).
 
 ## Evidence record
 
@@ -274,8 +278,16 @@ its verification, the analysis plan, status and human-review metadata.
 `GET /cohorts`, `GET /runs`, `GET /runs/{cohort}/{run_id}`,
 `GET /runs/{cohort}/{run_id}/agent`, `GET /agent/{cohort}/{run_id}/{agent_id}/report`
 and `.../agent_run`, plus `POST .../approve` / `POST .../reject`
-(`{by, note|reason}`; conflicts return 409). The API reads saved runs and
-records human decisions only and cannot trigger pipeline or agent runs.
+(`{by, note|reason}`; conflicts return 409).
+
+`POST /runs/{cohort}/{run_id}/agent` triggers an agent run in the
+background (`{backend, seed}`: `endpoint` reads `ONCOCS_LLM_*` env,
+`scripted-demo` needs no model) and returns a `job_id` for
+`GET /jobs/{job_id}`. When `DATABASE_URL` is set, agent-run records and
+jobs mirror into Postgres and the read endpoints serve from there. The
+`results/` filesystem remains canonical. The pipeline itself is not
+triggered through the API. Runs re-draft reports over saved
+results.json files.
 
 ## Limitations
 
