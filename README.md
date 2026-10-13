@@ -14,7 +14,7 @@ Two different things are evaluated here, and they have opposite outcomes.
 
 1. **The software passes.** The deterministic survival pipeline (Cox PH, RSF,
    metrics, assumption checks) verifies and replays bit-for-bit on all three
-   cohorts. The offline test suite passes (74 tests). Every number in the
+   cohorts. The offline test suite passes (96 tests). Every number in the
    results tables below comes from that code.
 2. **Gemma's written reports mostly do not pass.** After the numbers are
    computed, a local Gemma 3 model is asked only to *describe* them. Across the
@@ -202,6 +202,33 @@ FROZEN runs predate a prompt change and are not re-verified:
   mislabeled as calibration.
 - BRCA `4afbc74b7bc5` (12b): rejected for the "6-36" label false positive.
 - BRCA `052fa2c286da` (12b): passed verifier in 3 attempts, unapproved.
+
+### Endpoint runs (Qwen2.5 served on a Colab GPU)
+
+The `endpoint` backend sends generation to an OpenAI-compatible service
+(`oncocs/llm/endpoint.py`) instead of local Ollama. Four LUAD runs
+surfaced failure modes the same-prompt gemma runs never hit.
+
+- **`agent/a8a460e3431b` (Qwen2.5-7B):** every draft was cut mid-sentence
+  at the service's default 256-token generation bound, and
+  `missing_sections` flagged the absent tail sections on all 3 attempts.
+  Truncation, not writing, was the defect. Fixed by sending `max_tokens`
+  per request.
+- **`agent/535bfb3be89f` (Qwen2.5-7B, bound raised):** drafts tripled in
+  length but spent the budget enumerating per-covariate hazard ratios.
+  Invented p-values were flagged `unverified_numbers` (`p=0.5502` where
+  the recorded value is 0.5602) and CI bounds landed in the wrong model
+  blocks (`misattributed` ×12). Still truncated before the required
+  sections.
+- **`agent/1c01ac53d02f` (Qwen2.5-3B, grounding prompt):** complete
+  drafts, all sections, zero numeric violations. Rejected on 4 misquotes
+  (paraphrased passage text in quotation marks) and one `robust`.
+  Verbatim quoting exceeded small-model fidelity, so the prompt now
+  requires paraphrase-only citations.
+- **`agent/1abfb93c0599` (Qwen2.5-3B):** verifier passed on attempt 1,
+  the first verified draft through the endpoint backend and replays
+  byte-for-byte against its recorded transcript (PASS). Pending human
+  review.
 
 ## Quick start
 
