@@ -169,6 +169,20 @@ def test_report_prompt_grounds_numbers(synth_results):
     assert "advisory" in user
 
 
+def test_report_prompt_masks_plan_claim_digits(synth_results):
+    """A planner that emits sentence-style claims with invented numbers
+    (GBM failure mode) must not feed those digits to the report prompt."""
+    plan = ('{"focus_models": ["cox/clinical"], "claims_to_make": '
+            '["Harrell C-index of 0.75 and AUC of 0.82 at 12 months"], '
+            '"must_disclose": []}')
+    rec = _agent_run(synth_results.parents[3], synth_results,
+                     ["cohort text", plan, *_scripted_ok(synth_results)[2:]])
+    user = rec["transcript"][2]["messages"][1]["content"]
+    plan_json = user.split("copied):")[1]
+    assert "0.75" not in plan_json and "0.82" not in plan_json
+    assert "#.##" in plan_json
+
+
 def test_retry_prompt_contains_previous_draft(synth_results):
     bad = "## Cohort\n0.99999 fabricated.\n"
     responses = ["cohort text", '{"focus_models": []}',

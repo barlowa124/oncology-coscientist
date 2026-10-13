@@ -105,6 +105,18 @@ def render_table(results: dict, split: dict) -> str:
     return "\n".join(lines)
 
 
+def _plan_view(plan: dict) -> dict:
+    """Prompt view of the analysis plan with claim digits masked.
+
+    claims_to_make is free text a small planner can fill with invented
+    numbers; the report agent must never see those as citeable values.
+    """
+    view = json.loads(json.dumps(plan or {}))
+    view["claims_to_make"] = [re.sub(r"\d", "#", c)
+                              for c in view.get("claims_to_make", [])]
+    return view
+
+
 def build_graph(backend, seed: int | None = None):
     def cohort_agent(state: AgentState) -> dict:
         r = state["results"]
@@ -142,7 +154,11 @@ def build_graph(backend, seed: int | None = None):
         user = ("Choose what to discuss from this menu of already-computed items "
                 "(you cannot request new computations):\n" + json.dumps(menu, indent=1) +
                 "\nRespond with ONLY a JSON object: "
-                '{"focus_models": [...], "claims_to_make": [...], "must_disclose": [...]}')
+                '{"focus_models": [...], "claims_to_make": [...], "must_disclose": [...]}\n'
+                "claims_to_make lists which metrics to report for which models, e.g. "
+                '"harrell_c and auc_24m for cox/clinical". Never put numbers in '
+                "claims: you have not seen any results, so any number would be "
+                "invented.")
         resp = _chat(backend, "You are a planning agent. Reply with JSON only.", user, seed)
         try:
             plan = _parse_json(resp)
@@ -197,8 +213,8 @@ def build_graph(backend, seed: int | None = None):
             "failed, state the corresponding metrics as abstained. Forbidden phrasing: "
             "'clinically validated', 'proves', 'causes', 'should be used', 'outperforms', "
             "'state-of-the-art', 'robust' (in any form, including hedged uses "
-            "like 'might be robust'), and 'significant' without an adjacent "
-            "verifiable p-value. Do not name the language model, software versions, "
+            "like 'might be robust'), and 'significant' in any context. "
+            "Do not name the language model, software versions, "
             "or patient identifiers. "
             "Describe each check by its recorded outcome and detail; do not infer "
             "assumption validity from confidence intervals. "
@@ -206,9 +222,8 @@ def build_graph(backend, seed: int | None = None):
             "discrimination (rank agreement between predicted risk and observed "
             "survival); auc_12m/24m/36m are time-dependent AUCs measuring "
             "discrimination at that horizon; integrated_brier_6_36m is the overall "
-            "accuracy of predicted survival probabilities (lower is better); "
-            "calibration_24m is the agreement between predicted and observed "
-            "survival at 24 months. Do not call a concordance index a calibration "
+            "accuracy of predicted survival probabilities (lower is better). "
+            "Do not discuss calibration at all. Do not call a concordance index a calibration "
             "metric. When citing a model-specific number, name the model key "
             "it belongs to in the same sentence or bullet. Report model-level "
             "metrics only; do not list per-covariate hazard ratios, confidence "
@@ -221,12 +236,20 @@ def build_graph(backend, seed: int | None = None):
             + "\n\nCohort summary (advisory prose; the table wins on any "
             "conflict, and no number may appear that is absent from the "
             "table):\n" + state["cohort_summary"]
-            + "\n\nAnalysis plan:\n" + json.dumps(state["analysis_plan"])
+            + "\n\nAnalysis plan (structural only — which models and checks to "
+            "cover; any numbers inside it are unverified and must not be "
+            "copied):\n" + json.dumps(_plan_view(state["analysis_plan"]))
             + "\n\nWrite a markdown report with exactly these sections, in order:\n"
             "## Cohort\n## Models and metrics\n## Checks and abstentions\n## Limitations\n"
             "The headers must appear verbatim as shown above (## + exact title). "
             "Keep each section to a few sentences or bullets so all four "
-            "sections fit in one reply."
+            "sections fit in one reply. In '## Models and metrics' every model "
+            "in the analysis plan gets its own bullet starting with the model "
+            "key verbatim, then that model's metrics copied verbatim from the "
+            "table lines that begin with the same key (the 'model.metric = "
+            "value' lines). A model whose table line reads 'model.abstained = "
+            "true' instead gets '- model: abstained (reason copied from the "
+            "table)' — never metric values, since none were computed."
         )
         if state.get("passages"):
             listed = "\n".join(f"[{tag}] \"{text}\""
@@ -246,6 +269,10 @@ def build_graph(backend, seed: int | None = None):
             findings = []
             for u in v.get("unverified_numbers", []):
                 findings.append(f"  - {u['token']} (context: {u['context']})")
+            if v.get("unverified_numbers"):
+                findings.append("  - every number must be copied from a table "
+                                "line. A model marked 'abstained = true' has "
+                                "no metrics: write 'abstained', not values.")
             for u in v.get("unscoped_model_numbers", []):
                 findings.append(f"  - The number {u['token']} only exists under "
                                 f"model results ({', '.join(u['found_in'])}); cite it "
@@ -258,8 +285,12 @@ def build_graph(backend, seed: int | None = None):
                 findings.append(f"  - model {fm} was in the analysis plan but is "
                                 "never discussed")
             for fm in v.get("focus_without_values", []):
-                findings.append(f"  - model {fm} is named but none of its "
-                                "metric values are reported under it")
+                metrics = sorted(k.rsplit(".", 1)[1]
+                                 for k in state.get("flat_values", {})
+                                 if k.startswith(f"models.{fm}.metrics."))
+                hint = f" (e.g. {', '.join(metrics[:4])})" if metrics else ""
+                findings.append(f"  - add a bullet starting with '{fm}:' that "
+                                f"lists its own metric values from the table{hint}")
             for f in v.get("unknown_citations", []):
                 findings.append(f"  - citation tag {f} was not among the retrieved passages")
             for f in v.get("misquotes", []):
@@ -271,10 +302,12 @@ def build_graph(backend, seed: int | None = None):
                 findings.append(f"  - missing section: {s}")
             if v.get("abstention_missing"):
                 findings.append("  - a failed check must be disclosed as an abstention")
-            extra = ("Here is your previous draft:\n\n" + state["draft"] +
-                     "\n\nThe following problems were found. Return the complete "
-                     "corrected report, not a description of changes:\n"
-                     + "\n".join(findings))
+            extra = ("The report below was rejected by an automated checker.\n\n"
+                     "<rejected_draft>\n" + state["draft"] +
+                     "\n</rejected_draft>\n\n"
+                     "Fix every problem below in a rewritten report. Never copy "
+                     "this list, its bullets, or checker phrasing into the "
+                     "report:\n" + "\n".join(findings))
         return {"draft": _chat(backend, system, user, seed, extra_user=extra),
                 "attempts": attempts}
 

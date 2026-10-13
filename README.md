@@ -230,6 +230,39 @@ surfaced failure modes the same-prompt gemma runs never hit.
   byte-for-byte against its recorded transcript (PASS). Pending human
   review.
 
+A verifier tightening then showed that pass was thin: `1abfb93c0599`
+named every focus model but reported no values. A `focus_without_values`
+check now requires each in-scope focus model to carry at least one of
+its own recorded metrics, and the old run replays FROZEN. Six more
+endpoint runs under the tightened verifier mapped three further
+small-model failure modes, each fixed in the prompt or the plan
+hand-off rather than in the verifier.
+
+- The 3B pasted the retry findings verbatim into its next draft. The
+  retry prompt now wraps the rejected draft in `<rejected_draft>` tags
+  and forbids copying checker phrasing.
+- The analysis agent wrote sentence claims carrying invented metrics
+  ("Harrell C-index of 0.75"), and the report model quoted them. The
+  analysis prompt now restricts `claims_to_make` to metric names, and
+  `graph.py` masks digits in that field before it reaches the report
+  prompt (`_plan_view`).
+- GBM abstained all four models after failed checks, yet the model
+  wrote invented metrics into the new per-model bullets while also
+  writing "abstained" elsewhere. The bullet instruction now defines
+  the abstention form explicitly, and the prompt's example carries no
+  numbers (an earlier numeric example was copied verbatim into a
+  draft).
+
+Three final endpoint runs, all against the same 3B service.
+
+- **`agent/106b1edbf7b5` (LUAD):** pass on attempt 3. Attempt 1 was
+  thin, attempt 2 added values outside model scopes, attempt 3
+  reported per-model C-index, AUC, and Brier values correctly scoped.
+- **`agent/1171d5d935a4` (BRCA):** pass on attempt 1 with all four
+  focus models' metrics.
+- **`agent/254fd283defd` (GBM):** pass on attempt 2. Every model
+  reported as abstained with its reason and no fabricated metrics.
+
 ## Quick start
 
 ```bash

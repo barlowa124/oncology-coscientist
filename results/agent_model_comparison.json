@@ -28,9 +28,29 @@
           }
         }
       ],
-      "replay": "FROZEN",
+      "replay": null,
       "human_review": null,
       "path": "results/brca/24528d61379c/agent/052fa2c286da/agent_run.json"
+    },
+    {
+      "cohort": "brca",
+      "run_id": "24528d61379c",
+      "agent_run_id": "1171d5d935a4",
+      "model_id": "Qwen/Qwen2.5-3B-Instruct",
+      "status": "draft_pending_approval",
+      "attempts": 1,
+      "analysis_plan_fallback": false,
+      "findings_per_attempt": [
+        {
+          "attempt": 1,
+          "findings": {
+            "passed": 1
+          }
+        }
+      ],
+      "replay": null,
+      "human_review": null,
+      "path": "results/brca/24528d61379c/agent/1171d5d935a4/agent_run.json"
     },
     {
       "cohort": "brca",
@@ -61,7 +81,7 @@
           }
         }
       ],
-      "replay": "FROZEN",
+      "replay": null,
       "human_review": null,
       "path": "results/brca/24528d61379c/agent/14dee8f5d071/agent_run.json"
     },
@@ -97,7 +117,7 @@
           }
         }
       ],
-      "replay": "FROZEN",
+      "replay": null,
       "human_review": null,
       "path": "results/brca/24528d61379c/agent/39189caa1502/agent_run.json"
     },
@@ -131,7 +151,7 @@
           }
         }
       ],
-      "replay": "FROZEN",
+      "replay": null,
       "human_review": null,
       "path": "results/brca/24528d61379c/agent/4afbc74b7bc5/agent_run.json"
     },
@@ -165,7 +185,7 @@
           }
         }
       ],
-      "replay": "FROZEN",
+      "replay": null,
       "human_review": null,
       "path": "results/brca/24528d61379c/agent/5d5a01a0e471/agent_run.json"
     },
@@ -185,9 +205,41 @@
           }
         }
       ],
-      "replay": "FROZEN",
+      "replay": null,
       "human_review": null,
       "path": "results/brca/24528d61379c/agent/b81f24db3970/agent_run.json"
+    },
+    {
+      "cohort": "brca",
+      "run_id": "24528d61379c",
+      "agent_run_id": "c6a3f2c27c18",
+      "model_id": "Qwen/Qwen2.5-3B-Instruct",
+      "status": "rejected",
+      "attempts": 3,
+      "analysis_plan_fallback": false,
+      "findings_per_attempt": [
+        {
+          "attempt": 1,
+          "findings": {
+            "focus_without_values": 4
+          }
+        },
+        {
+          "attempt": 2,
+          "findings": {
+            "focus_without_values": 4
+          }
+        },
+        {
+          "attempt": 3,
+          "findings": {
+            "focus_without_values": 4
+          }
+        }
+      ],
+      "replay": null,
+      "human_review": null,
+      "path": "results/brca/24528d61379c/agent/c6a3f2c27c18/agent_run.json"
     },
     {
       "cohort": "brca",
@@ -218,9 +270,252 @@
           }
         }
       ],
-      "replay": "FROZEN",
+      "replay": null,
       "human_review": null,
       "path": "results/brca/24528d61379c/agent/dd95bfcd2b8b/agent_run.json"
+    },
+    {
+      "cohort": "brca",
+      "run_id": "24528d61379c",
+      "agent_run_id": "eb9049ebe1bb",
+      "model_id": "Qwen/Qwen2.5-3B-Instruct",
+      "status": "rejected",
+      "attempts": 3,
+      "analysis_plan_fallback": false,
+      "findings_per_attempt": [
+        {
+          "attempt": 1,
+          "findings": {
+            "focus_without_values": 4
+          }
+        },
+        {
+          "attempt": 2,
+          "findings": {
+            "focus_without_values": 4
+          }
+        },
+        {
+          "attempt": 3,
+          "findings": {
+            "focus_without_values": 4
+          }
+        }
+      ],
+      "replay": null,
+      "human_review": null,
+      "path": "results/brca/24528d61379c/agent/eb9049ebe1bb/agent_run.json"
+    },
+    {
+      "cohort": "brca",
+      "run_id": "875af3143ecd",
+      "agent_run_id": "6ef052f0cba8",
+      "model_id": "Qwen/Qwen2.5-3B-Instruct",
+      "status": "draft_pending_approval",
+      "attempts": 1,
+      "analysis_plan_fallback": false,
+      "findings_per_attempt": [
+        {
+          "attempt": 1,
+          "findings": {
+            "passed": 1
+          }
+        }
+      ],
+      "replay": null,
+      "human_review": null,
+      "path": "results/brca/875af3143ecd/agent/6ef052f0cba8/agent_run.json"
+    },
+    {
+      "cohort": "gbm",
+      "run_id": "2965fb5e36de",
+      "agent_run_id": "05a6dbeb245d",
+      "model_id": "Qwen/Qwen2.5-3B-Instruct",
+      "status": "rejected",
+      "attempts": 3,
+      "analysis_plan_fallback": false,
+      "findings_per_attempt": [
+        {
+          "attempt": 1,
+          "findings": {
+            "unverified_numbers": 24
+          }
+        },
+        {
+          "attempt": 2,
+          "findings": {
+            "unverified_numbers": 24
+          }
+        },
+        {
+          "attempt": 3,
+          "findings": {
+            "unverified_numbers": 24
+          }
+        }
+      ],
+      "replay": null,
+      "human_review": null,
+      "path": "results/gbm/2965fb5e36de/agent/05a6dbeb245d/agent_run.json"
+    },
+    {
+      "cohort": "gbm",
+      "run_id": "2965fb5e36de",
+      "agent_run_id": "254fd283defd",
+      "model_id": "Qwen/Qwen2.5-3B-Instruct",
+      "status": "draft_pending_approval",
+      "attempts": 2,
+      "analysis_plan_fallback": false,
+      "findings_per_attempt": [
+        {
+          "attempt": 1,
+          "findings": {
+            "unverified_numbers": 10
+          }
+        },
+        {
+          "attempt": 2,
+          "findings": {
+            "passed": 1
+          }
+        }
+      ],
+      "replay": null,
+      "human_review": null,
+      "path": "results/gbm/2965fb5e36de/agent/254fd283defd/agent_run.json"
+    },
+    {
+      "cohort": "gbm",
+      "run_id": "2965fb5e36de",
+      "agent_run_id": "a0a52cd63dc5",
+      "model_id": "Qwen/Qwen2.5-3B-Instruct",
+      "status": "rejected",
+      "attempts": 3,
+      "analysis_plan_fallback": false,
+      "findings_per_attempt": [
+        {
+          "attempt": 1,
+          "findings": {
+            "unverified_numbers": 12,
+            "forbidden": 1
+          }
+        },
+        {
+          "attempt": 2,
+          "findings": {
+            "unverified_numbers": 12,
+            "forbidden": 1
+          }
+        },
+        {
+          "attempt": 3,
+          "findings": {
+            "unverified_numbers": 12,
+            "forbidden": 1
+          }
+        }
+      ],
+      "replay": null,
+      "human_review": null,
+      "path": "results/gbm/2965fb5e36de/agent/a0a52cd63dc5/agent_run.json"
+    },
+    {
+      "cohort": "gbm",
+      "run_id": "2965fb5e36de",
+      "agent_run_id": "c80d7c109faf",
+      "model_id": "Qwen/Qwen2.5-3B-Instruct",
+      "status": "rejected",
+      "attempts": 3,
+      "analysis_plan_fallback": false,
+      "findings_per_attempt": [
+        {
+          "attempt": 1,
+          "findings": {
+            "unverified_numbers": 13
+          }
+        },
+        {
+          "attempt": 2,
+          "findings": {
+            "unverified_numbers": 1
+          }
+        },
+        {
+          "attempt": 3,
+          "findings": {
+            "unverified_numbers": 1
+          }
+        }
+      ],
+      "replay": null,
+      "human_review": null,
+      "path": "results/gbm/2965fb5e36de/agent/c80d7c109faf/agent_run.json"
+    },
+    {
+      "cohort": "gbm",
+      "run_id": "2965fb5e36de",
+      "agent_run_id": "e7713a0cd5bd",
+      "model_id": "Qwen/Qwen2.5-3B-Instruct",
+      "status": "rejected",
+      "attempts": 3,
+      "analysis_plan_fallback": false,
+      "findings_per_attempt": [
+        {
+          "attempt": 1,
+          "findings": {
+            "unverified_numbers": 10,
+            "forbidden": 1
+          }
+        },
+        {
+          "attempt": 2,
+          "findings": {
+            "forbidden": 1
+          }
+        },
+        {
+          "attempt": 3,
+          "findings": {
+            "forbidden": 1
+          }
+        }
+      ],
+      "replay": null,
+      "human_review": null,
+      "path": "results/gbm/2965fb5e36de/agent/e7713a0cd5bd/agent_run.json"
+    },
+    {
+      "cohort": "gbm",
+      "run_id": "2965fb5e36de",
+      "agent_run_id": "f547bc5e5720",
+      "model_id": "Qwen/Qwen2.5-3B-Instruct",
+      "status": "rejected",
+      "attempts": 3,
+      "analysis_plan_fallback": false,
+      "findings_per_attempt": [
+        {
+          "attempt": 1,
+          "findings": {
+            "unverified_numbers": 6,
+            "missing_sections": 1
+          }
+        },
+        {
+          "attempt": 2,
+          "findings": {
+            "unverified_numbers": 6
+          }
+        },
+        {
+          "attempt": 3,
+          "findings": {
+            "unverified_numbers": 6
+          }
+        }
+      ],
+      "replay": null,
+      "human_review": null,
+      "path": "results/gbm/2965fb5e36de/agent/f547bc5e5720/agent_run.json"
     },
     {
       "cohort": "gbm",
@@ -244,9 +539,42 @@
           }
         }
       ],
-      "replay": "FROZEN",
+      "replay": null,
       "human_review": null,
       "path": "results/gbm/2beaf67dc0b2/agent/0fb3e28f52d6/agent_run.json"
+    },
+    {
+      "cohort": "gbm",
+      "run_id": "2beaf67dc0b2",
+      "agent_run_id": "619154267b98",
+      "model_id": "Qwen/Qwen2.5-3B-Instruct",
+      "status": "rejected",
+      "attempts": 3,
+      "analysis_plan_fallback": false,
+      "findings_per_attempt": [
+        {
+          "attempt": 1,
+          "findings": {
+            "unverified_numbers": 6,
+            "missing_focus_models": 2
+          }
+        },
+        {
+          "attempt": 2,
+          "findings": {
+            "unverified_numbers": 22
+          }
+        },
+        {
+          "attempt": 3,
+          "findings": {
+            "unverified_numbers": 38
+          }
+        }
+      ],
+      "replay": null,
+      "human_review": null,
+      "path": "results/gbm/2beaf67dc0b2/agent/619154267b98/agent_run.json"
     },
     {
       "cohort": "gbm",
@@ -281,7 +609,7 @@
           }
         }
       ],
-      "replay": "FROZEN",
+      "replay": null,
       "human_review": null,
       "path": "results/gbm/2beaf67dc0b2/agent/a706c3f76993/agent_run.json"
     },
@@ -301,7 +629,7 @@
           }
         }
       ],
-      "replay": "FROZEN",
+      "replay": null,
       "human_review": {
         "decision": "rejected",
         "by": "barlowa124 (lead review)",
@@ -339,7 +667,7 @@
           }
         }
       ],
-      "replay": "FROZEN",
+      "replay": null,
       "human_review": null,
       "path": "results/gbm/2beaf67dc0b2/agent/c654c99fa00f/agent_run.json"
     },
@@ -371,7 +699,7 @@
           }
         }
       ],
-      "replay": "FROZEN",
+      "replay": null,
       "human_review": null,
       "path": "results/gbm/2beaf67dc0b2/agent/ce75cc3fd75a/agent_run.json"
     },
@@ -411,9 +739,42 @@
           }
         }
       ],
-      "replay": "FROZEN",
+      "replay": null,
       "human_review": null,
       "path": "results/gbm/2beaf67dc0b2/agent/ea53fcd852c2/agent_run.json"
+    },
+    {
+      "cohort": "luad",
+      "run_id": "3097990b11d8",
+      "agent_run_id": "106b1edbf7b5",
+      "model_id": "Qwen/Qwen2.5-3B-Instruct",
+      "status": "draft_pending_approval",
+      "attempts": 3,
+      "analysis_plan_fallback": false,
+      "findings_per_attempt": [
+        {
+          "attempt": 1,
+          "findings": {
+            "focus_without_values": 4
+          }
+        },
+        {
+          "attempt": 2,
+          "findings": {
+            "unscoped_model_numbers": 11,
+            "focus_without_values": 4
+          }
+        },
+        {
+          "attempt": 3,
+          "findings": {
+            "passed": 1
+          }
+        }
+      ],
+      "replay": null,
+      "human_review": null,
+      "path": "results/luad/3097990b11d8/agent/106b1edbf7b5/agent_run.json"
     },
     {
       "cohort": "luad",
@@ -431,7 +792,7 @@
           }
         }
       ],
-      "replay": "PASS",
+      "replay": null,
       "human_review": null,
       "path": "results/luad/3097990b11d8/agent/1abfb93c0599/agent_run.json"
     },
@@ -466,7 +827,7 @@
           }
         }
       ],
-      "replay": "FROZEN",
+      "replay": null,
       "human_review": null,
       "path": "results/luad/3097990b11d8/agent/1c01ac53d02f/agent_run.json"
     },
@@ -503,7 +864,7 @@
           }
         }
       ],
-      "replay": "FROZEN",
+      "replay": null,
       "human_review": null,
       "path": "results/luad/3097990b11d8/agent/318d61643606/agent_run.json"
     },
@@ -541,7 +902,7 @@
           }
         }
       ],
-      "replay": "FROZEN",
+      "replay": null,
       "human_review": null,
       "path": "results/luad/3097990b11d8/agent/36ab17c3f1b7/agent_run.json"
     },
@@ -574,7 +935,7 @@
           }
         }
       ],
-      "replay": "FROZEN",
+      "replay": null,
       "human_review": null,
       "path": "results/luad/3097990b11d8/agent/4918eaf618e7/agent_run.json"
     },
@@ -612,7 +973,7 @@
           }
         }
       ],
-      "replay": "FROZEN",
+      "replay": null,
       "human_review": null,
       "path": "results/luad/3097990b11d8/agent/535bfb3be89f/agent_run.json"
     },
@@ -650,7 +1011,7 @@
           }
         }
       ],
-      "replay": "FROZEN",
+      "replay": null,
       "human_review": null,
       "path": "results/luad/3097990b11d8/agent/6e63d7ff1c8b/agent_run.json"
     },
@@ -670,7 +1031,7 @@
           }
         }
       ],
-      "replay": "FROZEN",
+      "replay": null,
       "human_review": null,
       "path": "results/luad/3097990b11d8/agent/76a00fdba97d/agent_run.json"
     },
@@ -704,7 +1065,7 @@
           }
         }
       ],
-      "replay": "FROZEN",
+      "replay": null,
       "human_review": null,
       "path": "results/luad/3097990b11d8/agent/777c93997c7a/agent_run.json"
     },
@@ -724,7 +1085,7 @@
           }
         }
       ],
-      "replay": "FROZEN",
+      "replay": null,
       "human_review": {
         "decision": "rejected",
         "by": "barlowa124 (lead review)",
@@ -764,7 +1125,7 @@
           }
         }
       ],
-      "replay": "FROZEN",
+      "replay": null,
       "human_review": null,
       "path": "results/luad/3097990b11d8/agent/98d9952a9150/agent_run.json"
     },
@@ -805,7 +1166,7 @@
           }
         }
       ],
-      "replay": "FROZEN",
+      "replay": null,
       "human_review": null,
       "path": "results/luad/3097990b11d8/agent/a8a460e3431b/agent_run.json"
     },
@@ -841,7 +1202,7 @@
           }
         }
       ],
-      "replay": "FROZEN",
+      "replay": null,
       "human_review": null,
       "path": "results/luad/3097990b11d8/agent/a911996a2e14/agent_run.json"
     }
