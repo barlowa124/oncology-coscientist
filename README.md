@@ -280,17 +280,18 @@ small-model failure modes.
   model to dump verbatim quotes into Limitations. Passages now render
   unquoted, and the checks table renders as copyable sentences.
 
-The final sweep reran all three cohorts under identical code, one
-prompt set and one verifier against the same 3B service.
+The final sweep reran all three cohorts under identical code at two
+model scales, and every run passed on attempt 1.
 
-- **`agent/77fe3a4ac23e` (LUAD):** pass on attempt 1.
-- **`agent/dc07cf8dab4b` (BRCA):** pass on attempt 1.
-- **`agent/c85e0b06131c` (GBM):** pass on attempt 1, all four models
-  abstained with reasons.
+- **Qwen2.5-3B:** `77fe3a4ac23e` (LUAD), `dc07cf8dab4b` (BRCA),
+  `c85e0b06131c` (GBM, all four models abstained with reasons).
+- **Qwen2.5-14B:** `a080438819f2` (LUAD), `eea6fa8ba841` (BRCA),
+  `401e3254cc64` (GBM, where the analysis plan scoped two focus
+  models and the draft disclosed both abstentions).
 
-All three replay PASS against their recorded transcripts under the
-current code. `results/agent_model_comparison.json` carries 65 runs:
-3 replay PASS and 62 replay FROZEN, where FROZEN means a run's
+Each of those six replays PASS against its recorded transcript under
+the current code. `results/agent_model_comparison.json` carries 68
+runs: 6 replay PASS and 62 replay FROZEN, where FROZEN means a run's
 recorded prompts no longer match current code and its verdict cannot
 be re-claimed as current behavior.
 

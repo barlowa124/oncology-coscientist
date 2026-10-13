@@ -729,6 +729,28 @@
       "path": "results/brca/875af3143ecd/agent/e64d6c0c7f88/agent_run.json"
     },
     {
+      "cohort": "brca",
+      "run_id": "875af3143ecd",
+      "agent_run_id": "eea6fa8ba841",
+      "backend": "endpoint",
+      "model_id": "Qwen/Qwen2.5-14B-Instruct",
+      "status": "draft_pending_approval",
+      "attempts": 1,
+      "passed": true,
+      "analysis_plan_fallback": false,
+      "findings_per_attempt": [
+        {
+          "attempt": 1,
+          "findings": {
+            "passed": 1
+          }
+        }
+      ],
+      "replay": "PASS",
+      "human_review": null,
+      "path": "results/brca/875af3143ecd/agent/eea6fa8ba841/agent_run.json"
+    },
+    {
       "cohort": "gbm",
       "run_id": "2965fb5e36de",
       "agent_run_id": "05a6dbeb245d",
@@ -980,6 +1002,28 @@
       "replay": "FROZEN",
       "human_review": null,
       "path": "results/gbm/2beaf67dc0b2/agent/0fb3e28f52d6/agent_run.json"
+    },
+    {
+      "cohort": "gbm",
+      "run_id": "2beaf67dc0b2",
+      "agent_run_id": "401e3254cc64",
+      "backend": "endpoint",
+      "model_id": "Qwen/Qwen2.5-14B-Instruct",
+      "status": "draft_pending_approval",
+      "attempts": 1,
+      "passed": true,
+      "analysis_plan_fallback": false,
+      "findings_per_attempt": [
+        {
+          "attempt": 1,
+          "findings": {
+            "passed": 1
+          }
+        }
+      ],
+      "replay": "PASS",
+      "human_review": null,
+      "path": "results/gbm/2beaf67dc0b2/agent/401e3254cc64/agent_run.json"
     },
     {
       "cohort": "gbm",
@@ -1830,6 +1874,28 @@
       "replay": "FROZEN",
       "human_review": null,
       "path": "results/luad/3097990b11d8/agent/98d9952a9150/agent_run.json"
+    },
+    {
+      "cohort": "luad",
+      "run_id": "3097990b11d8",
+      "agent_run_id": "a080438819f2",
+      "backend": "endpoint",
+      "model_id": "Qwen/Qwen2.5-14B-Instruct",
+      "status": "draft_pending_approval",
+      "attempts": 1,
+      "passed": true,
+      "analysis_plan_fallback": false,
+      "findings_per_attempt": [
+        {
+          "attempt": 1,
+          "findings": {
+            "passed": 1
+          }
+        }
+      ],
+      "replay": "PASS",
+      "human_review": null,
+      "path": "results/luad/3097990b11d8/agent/a080438819f2/agent_run.json"
     },
     {
       "cohort": "luad",
