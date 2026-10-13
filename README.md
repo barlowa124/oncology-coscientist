@@ -253,15 +253,46 @@ hand-off rather than in the verifier.
   numbers (an earlier numeric example was copied verbatim into a
   draft).
 
-Three final endpoint runs, all against the same 3B service.
+Three endpoint runs passed against the same 3B service:
+`106b1edbf7b5` (LUAD, attempt 3), `1171d5d935a4` (BRCA, attempt 1),
+`254fd283defd` (GBM, attempt 2). Those runs now replay FROZEN under
+the tightened prompt and verifier. Live reruns surfaced further
+small-model failure modes.
 
-- **`agent/106b1edbf7b5` (LUAD):** pass on attempt 3. Attempt 1 was
-  thin, attempt 2 added values outside model scopes, attempt 3
-  reported per-model C-index, AUC, and Brier values correctly scoped.
-- **`agent/1171d5d935a4` (BRCA):** pass on attempt 1 with all four
-  focus models' metrics.
-- **`agent/254fd283defd` (GBM):** pass on attempt 2. Every model
-  reported as abstained with its reason and no fabricated metrics.
+- `16448fdcde62` (BRCA) passed while listing
+  `rsf/clinical_expression` as abstained beside its real values. A
+  `false_abstention` check now rejects valued models described as
+  abstained, and that run replays FROZEN.
+- Retries regenerated token-identical drafts. Attempt 1 runs at
+  temperature 0 and the inference service seeds sampling
+  deterministically, so identical findings produced identical
+  outputs. Retries now sample at nonzero temperature with an
+  attempt-specific marker.
+- LUAD's all-PASS cohort produced a fabricated abstention list in
+  "Checks and abstentions": the section header itself invited one.
+  The checks instruction now names abstention only when the results
+  contain a FAIL.
+- `robust` survived a flat word ban as `robustness`, so the verifier
+  now matches the word family. Zero-missingness entries were dropped
+  from the rendered table because "absence of missing data" reliably
+  drew evaluative claims about data completeness.
+- Passage listings were rendered in quotation marks, which taught the
+  model to dump verbatim quotes into Limitations. Passages now render
+  unquoted, and the checks table renders as copyable sentences.
+
+The final sweep reran all three cohorts under identical code, one
+prompt set and one verifier against the same 3B service.
+
+- **`agent/77fe3a4ac23e` (LUAD):** pass on attempt 1.
+- **`agent/dc07cf8dab4b` (BRCA):** pass on attempt 1.
+- **`agent/c85e0b06131c` (GBM):** pass on attempt 1, all four models
+  abstained with reasons.
+
+All three replay PASS against their recorded transcripts under the
+current code. `results/agent_model_comparison.json` carries 65 runs:
+3 replay PASS and 62 replay FROZEN, where FROZEN means a run's
+recorded prompts no longer match current code and its verdict cannot
+be re-claimed as current behavior.
 
 ## Quick start
 

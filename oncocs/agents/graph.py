@@ -17,6 +17,7 @@ from oncocs.data.download import load_manifest
 from oncocs.splits import load_split, split_sha256
 
 MAX_ATTEMPTS = 3
+RETRY_TEMPERATURE = 0.9
 
 
 class AgentState(TypedDict, total=False):
@@ -63,12 +64,13 @@ def _parse_json(text: str) -> dict:
 
 
 def _chat(backend, system: str, user: str, seed: int | None,
-          extra_user: str | None = None) -> str:
+          extra_user: str | None = None,
+          temperature: float = 0.0) -> str:
     messages = [{"role": "system", "content": system},
                 {"role": "user", "content": user}]
     if extra_user is not None:
         messages.append({"role": "user", "content": extra_user})
-    return backend.complete(messages, temperature=0.0, seed=seed)
+    return backend.complete(messages, temperature=temperature, seed=seed)
 
 
 def render_table(results: dict, split: dict) -> str:
@@ -81,21 +83,30 @@ def render_table(results: dict, split: dict) -> str:
     for k in ("n_patients", "n_patients_with_expression", "n_unsequenced_patients"):
         if results.get(k) is not None:
             lines.append(f"{k}: {results[k]}")
-    lines.append("dropped: " + json.dumps(results["dropped"]))
-    lines.append("missingness: " + json.dumps(results["missingness"]))
+    # zeros are omitted: "no missing X" entries invite the model to write
+    # evaluative claims about data completeness ("absence of missing data
+    # suggests a robust analysis")
+    lines.append("dropped: " + json.dumps(
+        {k: v for k, v in results["dropped"].items() if v}))
+    lines.append("missingness: " + json.dumps(
+        {k: v for k, v in results["missingness"].items()
+         if v.get("missing")}))
     lines.append("checks:")
     for c in results["checks"]:
-        verdict = "PASS" if c["passed"] else "FAIL"
-        lines.append(f"  {c['name']}: {verdict} {json.dumps(c['detail'])}")
+        if c["passed"]:
+            lines.append(f"  {c['name']}: PASS")
+        else:
+            reason = c["detail"].get("reason", json.dumps(c["detail"]))
+            lines.append(f"  {c['name']}: FAIL — {reason} "
+                         "(affected models abstained)")
     for name, out in results["models"].items():
         m = out["metrics"]
         if m.get("abstained"):
-            lines.append(f"{name}.abstained = true ({m['reason']})")
+            lines.append(f"{name}: abstained ({m['reason']})")
             continue
-        for k, v in m.items():
-            if k == "calibration_24m":
-                continue
-            lines.append(f"{name}.{k} = {v:.3f}")
+        pairs = " | ".join(f"{k} {v:.3f}" for k, v in m.items()
+                           if k != "calibration_24m")
+        lines.append(f"{name}: {pairs}")
         for h in out.get("hazard_ratios", []):
             lines.append(f"{name}.HR[{h['covariate']}] = {h['hazard_ratio']:.2f} "
                          f"[{h['hr_ci_lower']:.2f}, {h['hr_ci_upper']:.2f}] "
@@ -212,8 +223,11 @@ def build_graph(backend, seed: int | None = None):
             "come from the supplied results table exactly as displayed. If any check "
             "failed, state the corresponding metrics as abstained. Forbidden phrasing: "
             "'clinically validated', 'proves', 'causes', 'should be used', 'outperforms', "
-            "'state-of-the-art', 'robust' (in any form, including hedged uses "
-            "like 'might be robust'), and 'significant' in any context. "
+            "'state-of-the-art', 'robust' (and any derivative of it), and "
+            "'significant' — every word on "
+            "this list is banned in any context. Never rank or compare models: "
+            "report each model's values without judging which is better, "
+            "stronger, or best. "
             "Do not name the language model, software versions, "
             "or patient identifiers. "
             "Describe each check by its recorded outcome and detail; do not infer "
@@ -227,7 +241,10 @@ def build_graph(backend, seed: int | None = None):
             "metric. When citing a model-specific number, name the model key "
             "it belongs to in the same sentence or bullet. Report model-level "
             "metrics only; do not list per-covariate hazard ratios, confidence "
-            "intervals, or p-values."
+            "intervals, or p-values. A model is abstained only when its table "
+            "line literally says 'abstained'; never invent an abstention for a "
+            "model whose line carries values, and never attribute an "
+            "abstention to a check that passed."
         )
         user = (
             "Results table (numbers at display precision; the sole numeric "
@@ -244,15 +261,28 @@ def build_graph(backend, seed: int | None = None):
             "The headers must appear verbatim as shown above (## + exact title). "
             "Keep each section to a few sentences or bullets so all four "
             "sections fit in one reply. In '## Models and metrics' every model "
-            "in the analysis plan gets its own bullet starting with the model "
-            "key verbatim, then that model's metrics copied verbatim from the "
-            "table lines that begin with the same key (the 'model.metric = "
-            "value' lines). A model whose table line reads 'model.abstained = "
-            "true' instead gets '- model: abstained (reason copied from the "
-            "table)' — never metric values, since none were computed."
+            "in the analysis plan gets one bullet that copies its table line "
+            "verbatim ('- ' + the line, which already reads 'model: metric "
+            "value | metric value | ...' or 'model: abstained (...)'). "
+            "Copy values verbatim even when they look unusual (a low or "
+            "below-0.5 score is data, not an error). Report model-level "
+            "metrics only. In '## Checks and abstentions' write one short "
+            "bullet per check as 'name: PASS/FAIL reason'"
+            + (
+                "; for every FAIL add that the affected models abstained "
+                "(the word 'abstained' must appear in that section)"
+                if any(not c["passed"] for c in state["results"]["checks"])
+                else " — copy the table's check lines verbatim; do not add "
+                     "any model lines here"
+            )
+            + ". In '## Limitations' write one "
+            "bullet per fact only: each nonzero missingness entry, "
+            "n_unsequenced_patients if nonzero, and each FAILed check. "
+            "State the fact; never write a sentence judging whether the "
+            "data or analysis is adequate, complete, or sound."
         )
         if state.get("passages"):
-            listed = "\n".join(f"[{tag}] \"{text}\""
+            listed = "\n".join(f"[{tag}] {text}"
                                for tag, text in state["passages"].items())
             example_tag = next(iter(state["passages"]))
             user += (
@@ -262,17 +292,24 @@ def build_graph(backend, seed: int | None = None):
                 f"end the sentence with the bare tag, e.g. ... [{example_tag}]. "
                 "Never put passage text in quotation marks; never cite a tag "
                 "not listed above; numbers in Context must come from the "
-                "cited passage, not the results table.")
+                "cited passage, not the results table. If Context would "
+                "contain any table number, omit the section entirely.")
         extra = None
         if state.get("verification") and not state["verification"].get("passed", True):
             v = state["verification"]
             findings = []
             for u in v.get("unverified_numbers", []):
                 findings.append(f"  - {u['token']} (context: {u['context']})")
+            if any("context section" in str(u.get("context", ""))
+                   for u in v.get("unverified_numbers", [])):
+                findings.append("  - numbers found in the Context section "
+                                "came from the results table — delete the "
+                                "Context section entirely")
             if v.get("unverified_numbers"):
                 findings.append("  - every number must be copied from a table "
-                                "line. A model marked 'abstained = true' has "
-                                "no metrics: write 'abstained', not values.")
+                                "line. A model whose table line says "
+                                "'abstained' has no metrics: write "
+                                "'abstained', not values.")
             for u in v.get("unscoped_model_numbers", []):
                 findings.append(f"  - The number {u['token']} only exists under "
                                 f"model results ({', '.join(u['found_in'])}); cite it "
@@ -291,6 +328,10 @@ def build_graph(backend, seed: int | None = None):
                 hint = f" (e.g. {', '.join(metrics[:4])})" if metrics else ""
                 findings.append(f"  - add a bullet starting with '{fm}:' that "
                                 f"lists its own metric values from the table{hint}")
+            for fm in v.get("false_abstention", []):
+                findings.append(f"  - the rejected draft says {fm} is "
+                                "abstained, but its table line carries metric "
+                                "values — copy that line verbatim")
             for f in v.get("unknown_citations", []):
                 findings.append(f"  - citation tag {f} was not among the retrieved passages")
             for f in v.get("misquotes", []):
@@ -302,13 +343,19 @@ def build_graph(backend, seed: int | None = None):
                 findings.append(f"  - missing section: {s}")
             if v.get("abstention_missing"):
                 findings.append("  - a failed check must be disclosed as an abstention")
-            extra = ("The report below was rejected by an automated checker.\n\n"
+            extra = (f"Rewrite attempt {attempts}. The report below was "
+                     "rejected by an automated checker.\n\n"
                      "<rejected_draft>\n" + state["draft"] +
                      "\n</rejected_draft>\n\n"
-                     "Fix every problem below in a rewritten report. Never copy "
-                     "this list, its bullets, or checker phrasing into the "
-                     "report:\n" + "\n".join(findings))
-        return {"draft": _chat(backend, system, user, seed, extra_user=extra),
+                     "Write the report again from scratch — do not reuse "
+                     "sentences from the rejected draft. Fix every problem "
+                     "below; never copy this list, its bullets, or checker "
+                     "phrasing into the report:\n" + "\n".join(findings))
+        # retries sample at a small temperature: at temp 0 a rejected draft
+        # tends to regenerate token-identical text, so identical findings
+        # would loop forever — sampling is what makes the retry real.
+        return {"draft": _chat(backend, system, user, seed, extra_user=extra,
+                               temperature=RETRY_TEMPERATURE if extra else 0.0),
                 "attempts": attempts}
 
     def claim_verifier(state: AgentState) -> dict:
@@ -429,7 +476,7 @@ def run_agent(cohort: str, results_path: Path, backend, seed: int | None,
         "results_sha256": results_sha,
         "backend": backend.name,
         "model_id": backend.model_id,
-        "temperature": 0.0,
+        "temperature": {"first_attempt": 0.0, "retry": RETRY_TEMPERATURE},
         "seed": seed,
         "git_commit": evidence._git_commit(root),
         "git_dirty": evidence._git_dirty(root),

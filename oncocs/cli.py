@@ -442,8 +442,11 @@ def cmd_agent_summarize(args):
         entries.append({
             "cohort": rec.get("cohort"), "run_id": p.parents[2].name,
             "agent_run_id": rec.get("agent_run_id"),
+            "backend": rec.get("backend"),
             "model_id": rec.get("model_id"), "status": rec.get("status"),
             "attempts": len(rec.get("drafts", [])),
+            "passed": (rec.get("drafts") or [{}])[-1]
+                      .get("verification", {}).get("passed"),
             "analysis_plan_fallback": rec.get("analysis_plan_fallback"),
             "findings_per_attempt": findings,
             "replay": rec.get("_replay_status") if args.replay else None,

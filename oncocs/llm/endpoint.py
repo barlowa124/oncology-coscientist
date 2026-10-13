@@ -21,6 +21,7 @@ backend works in the slim Docker image unchanged.
 from __future__ import annotations
 
 import os
+import time
 
 import requests
 
@@ -65,13 +66,28 @@ class EndpointBackend:
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
-        resp = requests.post(f"{self.base_url}/chat/completions",
-                             json=body, headers=headers,
-                             timeout=self.timeout)
-        if resp.status_code != 200:
-            raise RuntimeError(
-                f"LLM endpoint {self.base_url} returned "
-                f"{resp.status_code}: {resp.text[:300]}")
+        last_err: Exception | None = None
+        for attempt in range(4):
+            try:
+                resp = requests.post(f"{self.base_url}/chat/completions",
+                                     json=body, headers=headers,
+                                     timeout=self.timeout)
+            except (requests.ConnectionError, requests.Timeout) as exc:
+                last_err = exc
+            else:
+                if resp.status_code == 200:
+                    break
+                if resp.status_code in (502, 503, 504, 429):
+                    last_err = RuntimeError(
+                        f"LLM endpoint {self.base_url} returned "
+                        f"{resp.status_code}: {resp.text[:300]}")
+                else:
+                    raise RuntimeError(
+                        f"LLM endpoint {self.base_url} returned "
+                        f"{resp.status_code}: {resp.text[:300]}")
+            time.sleep(min(5 * 2 ** attempt, 30))
+        else:
+            raise last_err  # type: ignore[misc]
         data = resp.json()
         try:
             return data["choices"][0]["message"]["content"]

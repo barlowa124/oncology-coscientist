@@ -396,6 +396,29 @@ def test_focus_models_with_values_pass():
     assert v["passed"], v
 
 
+def test_false_abstention_on_valued_model_rejected():
+    # live failure observed: a 3B wrote "harrell_c abstained (missing data)"
+    # for a model whose table line carried real values; number checks can't
+    # see a fabricated abstention because the claim is a word, not a value
+    body = ("* cox/clinical: C 0.647\n* rsf/clinical: C 0.639\n"
+            "* cox/clinical_expression: C 0.643\n"
+            "* rsf/clinical_expression: harrell_c abstained (missing data) | "
+            "auc_24m 0.632\n")
+    v = verify_draft(_scoped_draft(body), SCOPE_FLAT, [], models=SCOPE_MODELS,
+                     focus_models=FOCUS_ALL)
+    assert not v["passed"]
+    assert v["false_abstention"] == ["rsf/clinical_expression"]
+
+
+def test_negated_abstention_is_not_a_false_claim():
+    body = ("* cox/clinical: C 0.647\n* rsf/clinical: C 0.639\n"
+            "* cox/clinical_expression: C 0.643\n"
+            "* rsf/clinical_expression: C 0.632; this model did not abstain\n")
+    v = verify_draft(_scoped_draft(body), SCOPE_FLAT, [], models=SCOPE_MODELS,
+                     focus_models=FOCUS_ALL)
+    assert v["passed"], v
+
+
 def test_unscoped_model_number_rejected():
     # 0.639 exists only under models.rsf/clinical; in unscoped text it must fail.
     # (Numbers after the last model mention are scoped to it, so the unscoped
