@@ -345,6 +345,27 @@ def test_scoped_verifier_missing_focus_model():
     assert v["missing_focus_models"] == ["rsf/clinical_expression"]
 
 
+def test_focus_models_named_without_values_rejected():
+    # naming every focus model without reporting any of their values is a
+    # name-drop, not coverage
+    body = ("The focus models are cox/clinical, rsf/clinical, "
+            "cox/clinical_expression, and rsf/clinical_expression. "
+            "We discuss their discrimination metrics below.\n")
+    v = verify_draft(_scoped_draft(body), SCOPE_FLAT, [], models=SCOPE_MODELS,
+                     focus_models=FOCUS_ALL)
+    assert not v["passed"]
+    assert sorted(v["focus_without_values"]) == FOCUS_ALL
+
+
+def test_focus_models_with_values_pass():
+    body = ("* cox/clinical: C 0.647\n* rsf/clinical: C 0.639\n"
+            "* cox/clinical_expression: C 0.643\n"
+            "* rsf/clinical_expression: C 0.632\n")
+    v = verify_draft(_scoped_draft(body), SCOPE_FLAT, [], models=SCOPE_MODELS,
+                     focus_models=FOCUS_ALL)
+    assert v["passed"], v
+
+
 def test_unscoped_model_number_rejected():
     # 0.639 exists only under models.rsf/clinical; in unscoped text it must fail.
     # (Numbers after the last model mention are scoped to it, so the unscoped

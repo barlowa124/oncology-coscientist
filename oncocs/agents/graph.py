@@ -257,6 +257,9 @@ def build_graph(backend, seed: int | None = None):
             for fm in v.get("missing_focus_models", []):
                 findings.append(f"  - model {fm} was in the analysis plan but is "
                                 "never discussed")
+            for fm in v.get("focus_without_values", []):
+                findings.append(f"  - model {fm} is named but none of its "
+                                "metric values are reported under it")
             for f in v.get("unknown_citations", []):
                 findings.append(f"  - citation tag {f} was not among the retrieved passages")
             for f in v.get("misquotes", []):
