@@ -215,8 +215,12 @@ def verify_draft(draft: str, flat_values: dict[str, float],
                 missing_focus.append(fm)
                 continue
             # naming the model is not coverage: its scope must contain at
-            # least one of its own flat values
+            # least one of its own flat values. A model with no computed
+            # values (all checks failed, metrics abstained) has nothing to
+            # report; the abstention check covers that case.
             fm_vals = model_vals.get(fm, [])
+            if not fm_vals:
+                continue
             covered = False
             for s, e, k in scopes:
                 if k != fm:

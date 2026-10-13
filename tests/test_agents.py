@@ -357,6 +357,22 @@ def test_focus_models_named_without_values_rejected():
     assert sorted(v["focus_without_values"]) == FOCUS_ALL
 
 
+def test_abstained_models_exempt_from_value_coverage():
+    # an all-abstained cohort has no model values to report; naming the
+    # models and disclosing the abstention must not fail the coverage check
+    abst_models = {mk: {"metrics": {}} for mk in SCOPE_MODELS}
+    checks = [{"name": "covariates", "passed": False}]
+    draft = ("## Cohort\n501 patients.\n\n## Models and metrics\n"
+             "* cox/clinical, rsf/clinical, cox/clinical_expression, and "
+             "rsf/clinical_expression all abstained.\n\n"
+             "## Checks and abstentions\ncovariates failed; all models "
+             "abstain.\n\n## Limitations\nResearch only.")
+    v = verify_draft(draft, SCOPE_FLAT, checks,
+                     models=abst_models, focus_models=FOCUS_ALL)
+    assert not v["focus_without_values"]
+    assert v["passed"], v
+
+
 def test_focus_models_with_values_pass():
     body = ("* cox/clinical: C 0.647\n* rsf/clinical: C 0.639\n"
             "* cox/clinical_expression: C 0.643\n"
