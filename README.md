@@ -373,6 +373,15 @@ hashes and reruns the pipeline. Agent runs write
 the full prompt transcript (replayable via `RecordedBackend`), every draft with
 its verification, the analysis plan, status and human-review metadata.
 
+Upstream data drifts, and verify says so. cBioPortal retired the public
+tarballs, and the mutations member now arrives through a live API whose
+output shifts when upstream gene symbols are migrated. Re-downloading
+today produces a mutations file that hashes differently than the one the
+committed results consumed, so `verify` fails `data_manifest_sha256` for
+the recorded runs. That is the gate working: the manifest documents the
+original inputs byte-for-byte, and a changed upstream is reported as
+changed rather than silently absorbed.
+
 ## API
 
 `GET /cohorts`, `GET /runs`, `GET /runs/{cohort}/{run_id}`,
